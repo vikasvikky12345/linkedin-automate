@@ -31,11 +31,11 @@ export const esc = (s = '') =>
 
 const STYLE = `
   * { margin: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+  body { font-family: 'Open Sans', sans-serif; background: #0f172a; color: #e2e8f0; }
   .page { width: 1080px; padding: 90px; display: flex; flex-direction: column; gap: 40px; page-break-after: always; }
   h1 { font-size: 64px; line-height: 1.15; color: #fbbf24; }
   p { font-size: 38px; line-height: 1.45; }
-  pre { font: 34px/1.5 'SF Mono', Menlo, monospace; background: #1e293b; border-radius: 20px; padding: 40px; white-space: pre-wrap; }
+  pre { font: 34px/1.5 'JetBrains Mono', monospace; background: #1e293b; border-radius: 20px; padding: 40px; white-space: pre-wrap; }
   .foot { margin-top: auto; font-size: 28px; color: #94a3b8; }
 `;
 

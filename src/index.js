@@ -1,24 +1,44 @@
-import puppeteer from '@cloudflare/puppeteer';
-import { Buffer } from 'node:buffer';
+import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { SSMClient, GetParametersByPathCommand } from '@aws-sdk/client-ssm';
+import { LambdaClient, GetFunctionUrlConfigCommand } from '@aws-sdk/client-lambda';
 import { littleText, nextApproved, validatePosts, cardHtml, slidesHtml, esc } from './lib.js';
 
-const DRAFT_CRON = '30 3 * * *';
+const { BUCKET, GITHUB_REPO, LINKEDIN_VERSION } = process.env;
+const s3 = new S3Client({});
 const today = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); // IST
 
-export default {
-  async scheduled(event, env, ctx) {
-    ctx.waitUntil(safely(env, event.cron === DRAFT_CRON ? draft : publish));
-  },
+// EventBridge Scheduler sends {"job": "draft" | "publish"}; everything else is a Function URL request.
+export async function handler(event) {
+  const env = await config();
+  if (event.job) return safely(env, event.job === 'draft' ? draft : publish);
 
-  async fetch(req, env) {
-    const url = new URL(req.url);
-    if (url.pathname === '/review') return req.method === 'POST' ? review(req, env) : reviewPage(url, env);
-    if (url.pathname === '/auth') return startAuth(url, env);
-    if (url.pathname === '/callback') return finishAuth(url, env);
-    return new Response('Not found', { status: 404 });
-  },
-};
+  const q = event.queryStringParameters || {};
+  if (event.rawPath === '/review') {
+    if (event.requestContext.http.method !== 'POST') return reviewPage(q);
+    const body = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString() : event.body;
+    return review(Object.fromEntries(new URLSearchParams(body)));
+  }
+  if (event.rawPath === '/auth') return startAuth(env, q);
+  if (event.rawPath === '/callback') return finishAuth(env, q);
+  return { statusCode: 404, body: 'Not found' };
+}
 
+// Secrets live in SSM under /linkedin-agent/; loaded once per warm container.
+let cached;
+async function config() {
+  if (cached) return cached;
+  const env = {};
+  let NextToken;
+  do {
+    const r = await new SSMClient({}).send(new GetParametersByPathCommand({ Path: '/linkedin-agent/', WithDecryption: true, NextToken }));
+    for (const p of r.Parameters) env[p.Name.split('/').pop()] = p.Value;
+    NextToken = r.NextToken;
+  } while (NextToken);
+  const url = await new LambdaClient({}).send(new GetFunctionUrlConfigCommand({ FunctionName: process.env.AWS_LAMBDA_FUNCTION_NAME }));
+  return (cached = { ...env, APP_URL: url.FunctionUrl.replace(/\/$/, '') });
+}
+
+// Errors are emailed, not thrown: a retry would draft and email a second batch.
 async function safely(env, job) {
   try {
     await job(env);
@@ -28,15 +48,31 @@ async function safely(env, job) {
   }
 }
 
+// ---------- S3 storage: posts/<id>.json, media/<id>, state/*.json ----------
+
+async function get(Key, as = 'json') {
+  try {
+    const { Body } = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key }));
+    return as === 'bytes' ? Body.transformToByteArray() : JSON.parse(await Body.transformToString());
+  } catch (e) {
+    if (e.name === 'NoSuchKey') return null;
+    throw e;
+  }
+}
+const put = (Key, body) =>
+  s3.send(new PutObjectCommand({ Bucket: BUCKET, Key, Body: body instanceof Uint8Array ? body : JSON.stringify(body) }));
+const del = (Key) => s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key }));
+const list = async (Prefix) => ((await s3.send(new ListObjectsV2Command({ Bucket: BUCKET, Prefix }))).Contents || []).map((o) => o.Key);
+
 // ---------- 9 AM: write 3 posts from the latest prep notes and email them ----------
 
 async function draft(env) {
   const notes = await latestNotes(env);
   const progress = await github(env, 'progress.md');
-  const recent = (await env.KV.get('recent', 'json')) || [];
+  const recent = (await get('state/recent.json')) || [];
   const posts = await writePosts(env, notes, progress, recent);
 
-  const media = await render(env, posts);
+  const media = await render(posts);
   const date = today();
   const saved = [];
   for (const [i, p] of posts.entries()) {
@@ -48,22 +84,22 @@ async function draft(env) {
       token: crypto.randomUUID(),
       status: 'pending',
     };
-    await env.KV.put(`media:${post.id}`, media[i]);
-    await env.KV.put(`post:${post.id}`, JSON.stringify(post));
+    await put(`media/${post.id}`, media[i]);
+    await put(`posts/${post.id}.json`, post);
     saved.push(post);
   }
-  await env.KV.put('recent', JSON.stringify([...saved.map((p) => p.title), ...recent].slice(0, 30)));
+  await put('state/recent.json', [...saved.map((p) => p.title), ...recent].slice(0, 30));
 
-  const auth = await env.KV.get('li', 'json');
+  const auth = await get('state/li.json');
   const reconnect =
     !auth || auth.expires - Date.now() < 7 * 864e5
-      ? `<p style="color:#b91c1c"><b>LinkedIn access ${auth ? 'expires soon' : 'not connected'}.</b> <a href="${env.WORKER_URL}/auth?key=${env.ADMIN_KEY}">Reconnect LinkedIn</a></p>`
+      ? `<p style="color:#b91c1c"><b>LinkedIn access ${auth ? 'expires soon' : 'not connected'}.</b> <a href="${env.APP_URL}/auth?key=${env.ADMIN_KEY}">Reconnect LinkedIn</a></p>`
       : '';
   const body = saved
     .map(
       (p, i) => `<hr><h3>${i + 1}. ${esc(p.kind)}: ${esc(p.title)}</h3>
         <div style="white-space:pre-wrap;font-family:sans-serif">${esc(p.text)}</div>
-        <p><a href="${env.WORKER_URL}/review?id=${p.id}&t=${p.token}">Review &amp; approve</a></p>`,
+        <p><a href="${env.APP_URL}/review?id=${p.id}&t=${p.token}">Review &amp; approve</a></p>`,
     )
     .join('');
   await email(env, `3 LinkedIn posts for ${date}`, `${reconnect}<p>Approved posts go out at 10 AM, 2 PM and 7 PM, one per slot. Visuals are attached.</p>${body}`, saved.map((p, i) => ({
@@ -73,7 +109,7 @@ async function draft(env) {
 }
 
 async function github(env, path, raw = true) {
-  const r = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/contents/${path}`, {
+  const r = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
     headers: {
       Authorization: `Bearer ${env.GITHUB_TOKEN}`,
       Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json',
@@ -110,7 +146,7 @@ Rules:
 - tip: one practical takeaway or a mistake they made and the fix.
 - text: 500 to 1200 characters, strong first line, short paragraphs, plain text (no markdown, no **), 3 to 5 hashtags at the end like #JavaScript.
 - Honest learner voice ("today I learned", "I got this wrong"), not guru claims.
-- Code on cards: at most 12 lines, 50 characters wide.
+- Slides and cards: no emoji (the image renderer has no emoji font). Code at most 12 lines, 50 characters wide.
 
 PROGRESS FILE:
 ${progress}
@@ -131,8 +167,14 @@ ${notes.text}`;
   return validatePosts(JSON.parse((await r.json()).choices[0].message.content));
 }
 
-async function render(env, posts) {
-  const browser = await puppeteer.launch(env.BROWSER);
+// Chromium is ~60 MB, so it is only loaded on the 9 AM run.
+async function render(posts) {
+  const [{ default: chromium }, { default: puppeteer }] = await Promise.all([import('@sparticuz/chromium'), import('puppeteer-core')]);
+  const browser = await puppeteer.launch({
+    args: await puppeteer.defaultArgs({ args: chromium.args, headless: 'shell' }),
+    executablePath: await chromium.executablePath(),
+    headless: 'shell',
+  });
   try {
     const page = await browser.newPage();
     const out = [];
@@ -154,14 +196,15 @@ async function render(env, posts) {
 
 // ---------- Approve / reject ----------
 
-async function findPost(env, id, token) {
-  const post = await env.KV.get(`post:${id}`, 'json');
+async function findPost(id, token) {
+  if (!/^[\w-]+$/.test(id || '')) return null;
+  const post = await get(`posts/${id}.json`);
   return post && post.token === token ? post : null;
 }
 
 // GET only shows a form, so email link scanners can't approve posts by opening the link.
-async function reviewPage(url, env) {
-  const post = await findPost(env, url.searchParams.get('id'), url.searchParams.get('t'));
+async function reviewPage(q) {
+  const post = await findPost(q.id, q.t);
   if (!post) return html('<p>This post was already handled or the link is invalid.</p>');
   return html(`<h2>${esc(post.title)}</h2>
     <div style="white-space:pre-wrap">${esc(post.text)}</div>
@@ -173,36 +216,34 @@ async function reviewPage(url, env) {
     </form>`);
 }
 
-async function review(req, env) {
-  const form = await req.formData();
-  const post = await findPost(env, form.get('id'), form.get('t'));
+async function review(form) {
+  const post = await findPost(form.id, form.t);
   if (!post) return html('<p>This post was already handled or the link is invalid.</p>');
-  if (form.get('action') === 'approve') {
-    await env.KV.put(`post:${post.id}`, JSON.stringify({ ...post, status: 'approved' }));
+  if (form.action === 'approve') {
+    await put(`posts/${post.id}.json`, { ...post, status: 'approved' });
     return html('<p>✅ Approved. It will be posted in the next slot (10 AM, 2 PM or 7 PM).</p>');
   }
-  await env.KV.delete(`post:${post.id}`);
-  await env.KV.delete(`media:${post.id}`);
+  await del(`posts/${post.id}.json`);
+  await del(`media/${post.id}`);
   return html('<p>❌ Rejected and deleted.</p>');
 }
 
 // ---------- 10 AM / 2 PM / 7 PM: publish one approved post ----------
 
 async function publish(env) {
-  const { keys } = await env.KV.list({ prefix: 'post:' });
-  const posts = await Promise.all(keys.map((k) => env.KV.get(k.name, 'json')));
+  const posts = await Promise.all((await list('posts/')).map((k) => get(k)));
   const post = nextApproved(posts.filter(Boolean));
   if (!post) return;
 
-  const auth = await env.KV.get('li', 'json');
-  if (!auth) throw new Error(`Post ${post.id} is approved but LinkedIn is not connected. Open ${env.WORKER_URL}/auth?key=${env.ADMIN_KEY}`);
+  const auth = await get('state/li.json');
+  if (!auth) throw new Error(`Post ${post.id} is approved but LinkedIn is not connected. Open ${env.APP_URL}/auth?key=${env.ADMIN_KEY}`);
 
   const li = async (path, body) => {
     const r = await fetch(`https://api.linkedin.com/rest/${path}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${auth.token}`,
-        'LinkedIn-Version': env.LINKEDIN_VERSION,
+        'LinkedIn-Version': LINKEDIN_VERSION,
         'X-Restli-Protocol-Version': '2.0.0',
         'Content-Type': 'application/json',
       },
@@ -217,7 +258,7 @@ async function publish(env) {
   const up = await fetch(init.value.uploadUrl, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${auth.token}` },
-    body: await env.KV.get(`media:${post.id}`, 'arrayBuffer'),
+    body: await get(`media/${post.id}`, 'bytes'),
   });
   if (!up.ok) throw new Error(`LinkedIn upload: ${up.status} ${await up.text()}`);
 
@@ -230,38 +271,38 @@ async function publish(env) {
     lifecycleState: 'PUBLISHED',
     isReshareDisabledByAuthor: false,
   });
-  await env.KV.delete(`post:${post.id}`);
-  await env.KV.delete(`media:${post.id}`);
+  await del(`posts/${post.id}.json`);
+  await del(`media/${post.id}`);
 }
 
 // ---------- LinkedIn login (one click every ~60 days) ----------
 
-async function startAuth(url, env) {
-  if (url.searchParams.get('key') !== env.ADMIN_KEY) return new Response('Forbidden', { status: 403 });
+async function startAuth(env, q) {
+  if (q.key !== env.ADMIN_KEY) return { statusCode: 403, body: 'Forbidden' };
   const state = crypto.randomUUID();
-  await env.KV.put('oauth_state', state, { expirationTtl: 600 });
-  const q = new URLSearchParams({
+  await put('state/oauth.json', { state, expires: Date.now() + 600e3 });
+  const params = new URLSearchParams({
     response_type: 'code',
     client_id: env.LINKEDIN_CLIENT_ID,
-    redirect_uri: `${env.WORKER_URL}/callback`,
+    redirect_uri: `${env.APP_URL}/callback`,
     state,
     scope: 'openid profile w_member_social',
   });
-  return Response.redirect(`https://www.linkedin.com/oauth/v2/authorization?${q}`, 302);
+  return { statusCode: 302, headers: { Location: `https://www.linkedin.com/oauth/v2/authorization?${params}` } };
 }
 
-async function finishAuth(url, env) {
-  const state = await env.KV.get('oauth_state');
-  if (!state || url.searchParams.get('state') !== state) return new Response('Invalid state', { status: 403 });
-  await env.KV.delete('oauth_state');
+async function finishAuth(env, q) {
+  const saved = await get('state/oauth.json');
+  if (!saved || saved.expires < Date.now() || q.state !== saved.state) return { statusCode: 403, body: 'Invalid state' };
+  await del('state/oauth.json');
 
   const r = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'authorization_code',
-      code: url.searchParams.get('code'),
-      redirect_uri: `${env.WORKER_URL}/callback`,
+      code: q.code,
+      redirect_uri: `${env.APP_URL}/callback`,
       client_id: env.LINKEDIN_CLIENT_ID,
       client_secret: env.LINKEDIN_CLIENT_SECRET,
     }),
@@ -269,16 +310,17 @@ async function finishAuth(url, env) {
   if (!r.ok) return html(`<p>LinkedIn login failed: ${esc(await r.text())}</p>`);
   const { access_token, expires_in } = await r.json();
   const me = await (await fetch('https://api.linkedin.com/v2/userinfo', { headers: { Authorization: `Bearer ${access_token}` } })).json();
-  await env.KV.put('li', JSON.stringify({ token: access_token, expires: Date.now() + expires_in * 1000, urn: `urn:li:person:${me.sub}` }));
+  await put('state/li.json', { token: access_token, expires: Date.now() + expires_in * 1000, urn: `urn:li:person:${me.sub}` });
   return html(`<p>✅ LinkedIn connected as ${esc(me.name)}. Valid for ${Math.round(expires_in / 86400)} days.</p>`);
 }
 
 // ---------- helpers ----------
 
-const html = (body) =>
-  new Response(`<!doctype html><meta name="viewport" content="width=device-width"><body style="font-family:sans-serif;max-width:640px;margin:24px auto;padding:0 16px">${body}`, {
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
-  });
+const html = (body) => ({
+  statusCode: 200,
+  headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  body: `<!doctype html><meta name="viewport" content="width=device-width"><body style="font-family:sans-serif;max-width:640px;margin:24px auto;padding:0 16px">${body}`,
+});
 
 async function email(env, subject, body, attachments = []) {
   const r = await fetch('https://api.resend.com/emails', {

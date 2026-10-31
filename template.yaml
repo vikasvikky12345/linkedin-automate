@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Daily LinkedIn posts from js-angular-prep notes, approved by email
+
+Parameters:
+  GithubRepo:
+    Type: String
+    Default: vikasvikky12345/linkedin-automate
+  LinkedinVersion:
+    Type: String
+    Default: '202609' # YYYYMM; LinkedIn retires versions after ~1 year, bump if posts start failing
+
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - { Id: old-posts, Prefix: posts/, Status: Enabled, ExpirationInDays: 14 }
+          - { Id: old-media, Prefix: media/, Status: Enabled, ExpirationInDays: 14 }
+
+  Logs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/linkedin-agent
+      RetentionInDays: 14
+
+  Agent:
+    Type: AWS::Serverless::Function
+    DependsOn: Logs
+    Properties:
+      FunctionName: linkedin-agent
+      CodeUri: src/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Architectures: [x86_64] # the npm chromium build is x86 only
+      MemorySize: 2048
+      Timeout: 300
+      Environment:
+        Variables:
+          BUCKET: !Ref Bucket
+          GITHUB_REPO: !Ref GithubRepo
+          LINKEDIN_VERSION: !Ref LinkedinVersion
+      FunctionUrlConfig:
+        AuthType: NONE
+      EventInvokeConfig:
+        MaximumRetryAttempts: 0 # a retried draft would email a second batch
+      Policies:
+        - S3CrudPolicy: { BucketName: !Ref Bucket }
+        - Statement:
+            - Effect: Allow
+              Action: ssm:GetParametersByPath
+              Resource:
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/linkedin-agent
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/linkedin-agent/*
+            - Effect: Allow
+              Action: lambda:GetFunctionUrlConfig
+              Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:linkedin-agent
+      Events:
+        Draft:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 9 * * ? *)
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Input: '{"job":"draft"}'
+            RetryPolicy: { MaximumRetryAttempts: 0 }
+        Publish:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 10,14,19 * * ? *)
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Input: '{"job":"publish"}'
+            RetryPolicy: { MaximumRetryAttempts: 0 }
+
+  # Public function URLs also need InvokeFunction (AWS change, Oct 2025).
+  AgentUrlInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Agent
+      Action: lambda:InvokeFunction
+      Principal: '*'
+      InvokedViaFunctionUrl: true
+
+Outputs:
+  AppUrl:
+    Description: Add <AppUrl>callback to the LinkedIn app's redirect URLs
+    Value: !GetAtt AgentUrl.FunctionUrl

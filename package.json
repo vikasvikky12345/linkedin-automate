@@ -3,14 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --test-scheduled",
-    "deploy": "wrangler deploy",
     "test": "node test.mjs"
-  },
-  "dependencies": {
-    "@cloudflare/puppeteer": "^1.0.0"
-  },
-  "devDependencies": {
-    "wrangler": "^4.0.0"
   }
 }
