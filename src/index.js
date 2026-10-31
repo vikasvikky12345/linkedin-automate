@@ -141,11 +141,21 @@ Return JSON only:
 ]}
 
 Rules:
-- carousel: 5 to 8 slides teaching one concept step by step. Last slide is a short summary.
-- puzzle: a short tricky snippet. Never reveal the answer in the card or post text.
-- tip: one practical takeaway or a mistake they made and the fix.
-- text: 500 to 1200 characters, strong first line, short paragraphs, plain text (no markdown, no **), 3 to 5 hashtags at the end like #JavaScript.
-- Honest learner voice ("today I learned", "I got this wrong"), not guru claims.
+- Every post text starts with the series line "Learn JS with Vikas | <topic in 2 to 5 words>", then a blank line, then the hook.
+- Hook: one or two short lines that make people click "see more" (only about 200 characters show). Use a different hook style for each of the 3 posts, picked from:
+  * Scenario: "Picture this: a form saves quantity 0 and the API gets 10 instead..." (a realistic bug from a real project, then "this is exactly what tripped me up in my prep").
+  * Did you know: one surprising fact, e.g. "Did you know null >= 0 is true but null == 0 is false?"
+  * Confession: "I got this wrong 3 times this week."
+  * Quiz: "Quick one before your coffee: what does this print?"
+  * Myth vs fact: "Everyone says ?? is just a safer ||. Not quite."
+- Never claim something happened at a job or with a real colleague or client. Scenarios are framed as "picture this", "imagine", or "in my prep today".
+- After the hook, really teach it: the problem, why JavaScript behaves that way (the actual rule), and the fix or the right mental model. Short paragraphs, one idea each. A beginner should understand it without the image.
+- End with a specific question that invites a comment (e.g. "Which of these 4 lines surprised you?"), never a generic "Thoughts?" or "Agree?". Then 3 to 5 hashtags like #JavaScript #LearnJSWithVikas.
+- text: 900 to 1800 characters, plain text (no markdown, no **). A few arrows or numbers for steps are fine.
+- carousel: 6 to 8 slides. Slide 1 is a hook question or bold claim, then one idea per slide (problem, why, fix, common mistake), last slide a 3-line summary plus "Follow for more Learn JS with Vikas".
+- puzzle: a short tricky snippet. Never reveal the answer in the card or post text; tell people to comment their answer with a one-line reason. The text can explain the concept around it without giving away the output.
+- tip: one practical takeaway or a mistake they made, with before/after code on the card.
+- Honest learner voice, not guru claims.
 - Slides and cards: no emoji (the image renderer has no emoji font). Code at most 12 lines, 50 characters wide.
 
 PROGRESS FILE:
