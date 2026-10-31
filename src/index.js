@@ -1,5 +1,6 @@
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { SSMClient, GetParametersByPathCommand } from '@aws-sdk/client-ssm';
+import { readFileSync } from 'node:fs';
 import { LambdaClient, GetFunctionUrlConfigCommand } from '@aws-sdk/client-lambda';
 import { littleText, nextApproved, validatePosts, cardHtml, slidesHtml, esc } from './lib.js';
 
@@ -164,17 +165,47 @@ ${progress}
 STUDY NOTES:
 ${notes.text}`;
 
+  const posts = validatePosts(await deepseek(env, [{ role: 'user', content: prompt }]));
+  console.log('before humanizer', JSON.stringify(posts.map((p) => p.text))); // to compare in the logs
+  try {
+    return await humanize(env, posts);
+  } catch (e) {
+    console.error('humanize failed, keeping the first draft', e); // a worse text beats no email at all
+    return posts;
+  }
+}
+
+// Second pass with the humanizer skill (MIT, github.com/blader/humanizer) to strip AI writing tells.
+const HUMANIZER = readFileSync(new URL('./humanizer/SKILL.md', import.meta.url), 'utf8');
+
+async function humanize(env, posts) {
+  const out = await deepseek(env, [
+    { role: 'system', content: HUMANIZER },
+    {
+      role: 'user',
+      content: `Embedded mode. Rewrite each LinkedIn post text below using the rules above. Keep for each post:
+- the first line "Learn JS with Vikas | ..." exactly as it is,
+- the hook's style (question, quiz, "Did you know", confession or scenario) and the closing question,
+- every technical fact and code value, and the hashtags at the end.
+A LinkedIn post can use short paragraphs; that is not a tell. Do not add facts.
+Return JSON only: {"texts":["...","...","..."]} in the same order.
+
+${JSON.stringify(posts.map((p) => p.text))}`,
+    },
+  ]);
+  const texts = out?.texts;
+  if (!Array.isArray(texts) || texts.length !== posts.length) throw new Error('humanizer returned the wrong shape');
+  return posts.map((p, i) => (texts[i]?.startsWith('Learn JS with Vikas') ? { ...p, text: texts[i] } : p));
+}
+
+async function deepseek(env, messages) {
   const r = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      response_format: { type: 'json_object' },
-      messages: [{ role: 'user', content: prompt }],
-    }),
+    body: JSON.stringify({ model: 'deepseek-chat', response_format: { type: 'json_object' }, messages }),
   });
   if (!r.ok) throw new Error(`DeepSeek: ${r.status} ${await r.text()}`);
-  return validatePosts(JSON.parse((await r.json()).choices[0].message.content));
+  return JSON.parse((await r.json()).choices[0].message.content);
 }
 
 // Chromium is ~60 MB, so it is only loaded on the 9 AM run.

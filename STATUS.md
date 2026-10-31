@@ -15,6 +15,7 @@ Study with `/js-angular-prep` in Claude Code → the next morning at 9 AM IST, 3
 | LinkedIn access | Own LinkedIn developer app (not Composio) | No third party holding the login; scheduled agent doesn't need an MCP |
 | Email | Resend (free) | SES can't reliably send from a @gmail.com address without my own domain |
 | Notes storage | This public repo (`notes/`, `progress.md`) | One repo for code and notes; "learning in public" |
+| Post style | "Learn JS with Vikas" series, varied hooks, second DeepSeek pass with the MIT humanizer skill (`src/humanizer/`) | Posts read less like AI; no made-up job stories |
 | Video | Skipped | Paid tools, generic results; images and carousels instead |
 | Posting times | 10 AM, 2 PM, 7 PM IST | Posting all 3 at once hurts reach |
 
