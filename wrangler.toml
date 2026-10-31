@@ -1,0 +1,21 @@
+name = "linkedin-agent"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+browser = { binding = "BROWSER" }
+
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_KV_ID" # npx wrangler kv namespace create KV
+
+# Times are UTC. 03:30 = 9 AM IST (draft + email), then 10 AM, 2 PM, 7 PM IST (publish).
+[triggers]
+crons = ["30 3 * * *", "30 4 * * *", "30 8 * * *", "30 13 * * *"]
+
+[vars]
+GITHUB_REPO = "vikasvikky12345/linkedin-automate"
+WORKER_URL = "https://linkedin-agent.REPLACE_WITH_SUBDOMAIN.workers.dev" # printed by the first deploy
+LINKEDIN_VERSION = "202609" # YYYYMM; LinkedIn retires versions after ~1 year, bump if posts start failing
+# Secrets (npx wrangler secret put <NAME>):
+# EMAIL_TO, DEEPSEEK_API_KEY, LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET, GITHUB_TOKEN, RESEND_API_KEY, ADMIN_KEY
