@@ -30,17 +30,19 @@ Study with `/js-angular-prep` in Claude Code → the next morning at 9 AM IST, 3
 
 ## Where we are now
 
-Code is finished and pushed but **not deployed and never run for real**. Waiting on account setup (step 1 below).
+Deployed and LinkedIn connected (2026-10-31), but **never run for real**. Next: a study session that pushes a notes file (step 8), then the test run (step 9).
 
 ## Left to do (in order; details in [README.md](README.md))
 
-1. [ ] Personal AWS: IAM user + `aws configure --profile personal` (region `ap-south-1`); confirm it is NOT the office account; $1 budget alert
-2. [ ] GitHub fine-grained token (read-only Contents on `linkedin-automate`), logged in as vikasvikky12345
-3. [ ] Resend account with my Gmail + API key
-4. [ ] LinkedIn developer app (needs a Company Page): add "Share on LinkedIn" + "Sign In with LinkedIn using OpenID Connect"
-5. [ ] `AWS_PROFILE=personal ./secrets.sh`
-6. [ ] `AWS_PROFILE=personal ./deploy.sh`, then add `<AppUrl>callback` as the LinkedIn redirect URL
-7. [ ] Open `<AppUrl>auth?key=<ADMIN_KEY>` to connect LinkedIn
+1. [x] Personal AWS: IAM user `vikas-cli` + `aws configure --profile personal` (region `ap-south-1`)
+   - [x] Budget alert: "My Monthly Cost Budget", $70/month (other projects already cost ~$60-66/month). Alerts at 85% actual, 100% actual, 100% forecast
+2. [x] GitHub fine-grained token (read-only Contents on `linkedin-automate`), logged in as vikasvikky12345. Already stored in SSM (`/linkedin-agent/GITHUB_TOKEN`)
+3. [x] Resend account with my Gmail + API key. `RESEND_API_KEY` and `EMAIL_TO` stored in SSM
+4. [x] LinkedIn developer app (needs a Company Page): add "Share on LinkedIn" + "Sign In with LinkedIn using OpenID Connect"
+5. [x] `AWS_PROFILE=personal ./secrets.sh`: all 7 keys in SSM
+6. [x] Deployed (2026-10-31, via the console: code zip in bucket `new-linkedin-agent-artifacts-<account>`, stack `linkedin-agent`). AppUrl is in the stack's Outputs tab
+   - [x] Add `<AppUrl>callback` as the LinkedIn redirect URL
+7. [x] Open `<AppUrl>auth?key=<ADMIN_KEY>` to connect LinkedIn (connected 2026-10-31, expires 2026-12-30)
 8. [ ] Do one `/js-angular-prep` session and check that a notes file gets pushed here
 9. [ ] Test run (`aws lambda invoke` with `{"job":"draft"}`), approve a post, then `{"job":"publish"}`
 10. [ ] Clean-up: `rm -rf ~/.claude/skills/js-angular-prep/.git` (old unused repo from the first attempt)
