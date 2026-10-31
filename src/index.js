@@ -159,6 +159,9 @@ Rules:
 - Honest learner voice, not guru claims.
 - Slides and cards: no emoji (the image renderer has no emoji font). Code at most 12 lines, 50 characters wide.
 
+STYLE GUIDE FOR THE POST TEXT (wins over the rules above where they differ):
+${POST_STYLE}
+
 PROGRESS FILE:
 ${progress}
 
@@ -177,6 +180,7 @@ ${notes.text}`;
 
 // Second pass with the humanizer skill (MIT, github.com/blader/humanizer) to strip AI writing tells.
 const HUMANIZER = readFileSync(new URL('./humanizer/SKILL.md', import.meta.url), 'utf8');
+const POST_STYLE = readFileSync(new URL('./post-style.md', import.meta.url), 'utf8');
 
 async function humanize(env, posts) {
   const out = await deepseek(env, [
@@ -186,7 +190,7 @@ async function humanize(env, posts) {
       content: `Embedded mode. Rewrite each LinkedIn post text below using the rules above. Keep for each post:
 - the first line "Learn JS with Vikas | ..." exactly as it is,
 - the hook's style (question, quiz, "Did you know", confession or scenario) and the closing question,
-- every technical fact and code value, and the hashtags at the end.
+- every technical fact, every code line exactly as written, the emojis, and the hashtags at the end.
 A LinkedIn post can use short paragraphs; that is not a tell. Do not add facts.
 Return JSON only: {"texts":["...","...","..."]} in the same order.
 
