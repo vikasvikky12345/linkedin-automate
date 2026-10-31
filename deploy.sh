@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 . ./guard.sh
 
-ARTIFACTS="linkedin-agent-artifacts-$ACCOUNT"
+ARTIFACTS="new-linkedin-agent-artifacts-$ACCOUNT" # the old name hit an S3 create conflict
 if ! aws s3api head-bucket --bucket "$ARTIFACTS" 2>/dev/null; then
   aws s3 mb "s3://$ARTIFACTS"
   aws s3api put-bucket-lifecycle-configuration --bucket "$ARTIFACTS" \
