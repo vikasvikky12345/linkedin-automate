@@ -1,6 +1,6 @@
 # LinkedIn agent
 
-Read [PROGRESS.md](PROGRESS.md) first: what's done, where we are, what's left. Keep it updated when a step is finished or a decision changes. Setup commands are in [README.md](README.md).
+Read [STATUS.md](STATUS.md) first: what's done, where we are, what's left. Keep it updated when a step is finished or a decision changes. Setup commands are in [README.md](README.md).
 
 ## Accounts: personal only
 
