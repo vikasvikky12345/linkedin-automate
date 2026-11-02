@@ -71,6 +71,20 @@ Resources:
             ScheduleExpressionTimezone: Asia/Kolkata
             Input: '{"job":"publish"}'
             RetryPolicy: { MaximumRetryAttempts: 0 }
+        Market:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 10 * * ? *)
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Input: '{"job":"market"}'
+            RetryPolicy: { MaximumRetryAttempts: 0 }
+        Ideas:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(30 10 * * ? *)
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Input: '{"job":"ideas"}'
+            RetryPolicy: { MaximumRetryAttempts: 0 }
 
   # Public function URLs also need InvokeFunction (AWS change, Oct 2025).
   AgentUrlInvoke:

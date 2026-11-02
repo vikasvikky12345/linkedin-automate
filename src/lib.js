@@ -69,3 +69,67 @@ export const slidesHtml = (slides) =>
   `<html><head><style>${STYLE} @page { size: 1080px 1350px; margin: 0; }</style></head><body>${slides
     .map((s, i) => block(s, 1350, i + 1, slides.length))
     .join('')}</body></html>`;
+
+// ---------- Market report ----------
+
+const decode = (s) =>
+  s.replace(/&(lt|gt|quot|#39|apos|nbsp|#\d+);/g, (m, e) =>
+    ({ lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'", nbsp: ' ' })[e] ?? String.fromCharCode(e.slice(1))).replace(/&amp;/g, '&');
+
+// Feeds escape their HTML, so decode before stripping tags.
+export const plainText = (s = '') => decode(decode(s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')).replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+
+// Minimal RSS/Atom reader: these feeds are simple, so a regex beats adding an XML dependency.
+export function parseFeed(xml, max = 20) {
+  return [...xml.matchAll(/<(item|entry)\b[\s\S]*?<\/\1>/g)].slice(0, max).map(([block]) => {
+    const tag = (name) => block.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)</${name}>`))?.[1] || '';
+    const url = block.match(/<link\b[^>]*href="([^"]+)"/)?.[1] || plainText(tag('link'));
+    const text = tag('description') || tag('summary') || tag('content') || tag('ht:news_item_title');
+    return { title: plainText(tag('title')), url: decode(url), text: plainText(text).slice(0, 300) };
+  });
+}
+
+// Links the model made up are dropped: only urls we actually fetched are kept, in every list.
+export function validateReport(data, urls, listKey = 'gaps') {
+  if (!Array.isArray(data?.[listKey]) || !data[listKey].length) throw new Error(`Model returned no ${listKey}`);
+  const known = (x) => ({ ...x, url: urls.has(x?.url) ? x.url : null });
+  const out = { headline: String(data.headline || '') };
+  for (const [k, v] of Object.entries(data)) if (k !== 'headline') out[k] = Array.isArray(v) ? v.map(known) : v;
+  return out;
+}
+
+const titled = (x) => (x.url ? `<a href="${esc(x.url)}">${esc(x.title)}</a>` : esc(x.title));
+const section = (title, rows = [], row) => (rows.length ? `<h2>${title}</h2>${rows.map(row).join('')}` : '');
+const notes = (title, rows) => section(title, rows, (x) => `<p>${titled(x)}: ${esc(x.note)}</p>`);
+
+const footer = (r, { archive = [], other } = {}) => `<hr>
+${other ? `<p>Also today: <a href="${esc(other.href)}">${esc(other.title)}</a></p>` : ''}
+<p style="color:#64748b">Sources: ${esc(r.sources.join(', '))}${r.failed.length ? `<br>Failed today: ${esc(r.failed.join('; '))}` : ''}</p>
+${archive.length ? `<p>Past reports: ${archive.map((a) => `<a href="${esc(a.href)}">${esc(a.date)}</a>`).join(' · ')}</p>` : ''}`;
+
+export const marketHtml = (r, links) => `<h1>Market report ${esc(r.date)}</h1>
+<p><b>${esc(r.headline)}</b></p>
+${section('Gaps worth filling', r.gaps, (g) => `<h3>${titled(g)}</h3>
+  <p>${esc(g.pain)}</p><p><b>Who pays:</b> ${esc(g.who)}<br><b>What to build:</b> ${esc(g.build)}</p>`)}
+${r.idea ? `<h2>Idea for you (logistics &amp; e-commerce)</h2><h3>${esc(r.idea.title)}</h3><p>${esc(r.idea.pitch)}</p><p><b>First step this week:</b> ${esc(r.idea.firstStep)}</p>` : ''}
+${notes('Trending', r.trends)}
+${notes('Funding &amp; startup news', r.funding)}
+${footer(r, links)}`;
+
+const tag = (t) => `<span style="background:#e2e8f0;border-radius:4px;padding:1px 6px;font-size:13px">${esc(t)}</span>`;
+const deepDive = (x) =>
+  x ? `<h2>Deep dive: ${esc(x.title)}</h2>
+  <p><b>Customers:</b> ${esc(x.customers)}</p><p><b>Competitors:</b> ${esc(x.competitors)}</p>
+  <p><b>Numbers:</b> ${esc(x.numbers)}</p><p><b>Risks:</b> ${esc(x.risks)}</p><p><b>First step:</b> ${esc(x.firstStep)}</p>` : '';
+
+export const ideasHtml = (r, links) => `<h1>Business ideas ${esc(r.date)}</h1>
+<p><b>${esc(r.headline)}</b></p>
+${section('Top ideas today', r.ideas, (i) => `<h3>${titled(i)}</h3>
+  <p>${tag(i.category)} ${tag(i.cost)} ${tag(i.time)}</p>
+  <p>${esc(i.what)}</p><p><b>Why now:</b> ${esc(i.why)}<br><b>How it makes money:</b> ${esc(i.money)}<br><b>First step:</b> ${esc(i.firstStep)}</p>`)}
+${deepDive(r.deepDive)}
+${notes('Startups getting funded', r.funding)}
+${notes('Products to sell online', r.products)}
+${notes('Local &amp; offline opportunities', r.local)}
+${notes('Side hustles &amp; services', r.hustles)}
+${footer(r, links)}`;

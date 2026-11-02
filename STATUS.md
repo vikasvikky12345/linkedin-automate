@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-10-31
+Last updated: 2026-11-01
 
 ## Goal
 
@@ -18,6 +18,8 @@ Study with `/js-angular-prep` in Claude Code → the next morning at 9 AM IST, 3
 | Post style | "Learn JS with Vikas" series, varied hooks, second DeepSeek pass with the MIT humanizer skill (`src/humanizer/`) | Posts read less like AI; no made-up job stories |
 | Video | Skipped | Paid tools, generic results; images and carousels instead |
 | Posting times | 10 AM, 2 PM, 7 PM IST | Posting all 3 at once hurts reach |
+| Market report | Same Lambda, `market` job at 10 AM IST; free RSS/API sources only; report saved in S3 `reports/`, page at `/report` behind `ADMIN_KEY` | No new accounts or keys; Amazon/G2/Statista block scraping, Upwork feeds are gone |
+| Business ideas report | Second email at 10:30 AM (`ideas` job), same code path as `market` (`REPORTS` in `src/index.js`); every idea tagged with ₹ cost and side/full-time; reports in S3 `reports/<type>/` | Wanted any business, not only e-commerce; separate email keeps each one short. Budget and time not decided yet, so ideas are tagged, not filtered |
 
 ## Done
 
@@ -47,6 +49,13 @@ Deployed and LinkedIn connected (2026-10-31), but **never run for real**. Next: 
 8. [ ] Do one `/js-angular-prep` session and check that a notes file gets pushed here
 9. [ ] Test run (`aws lambda invoke` with `{"job":"draft"}`), approve a post, then `{"job":"publish"}`
 10. [ ] Clean-up: `rm -rf ~/.claude/skills/js-angular-prep/.git` (old unused repo from the first attempt)
+
+## Market report (added 2026-11-01)
+
+- [x] Code + tests (`npm test`); sources checked from the Mac: HN, Product Hunt, Inc42, YourStory, Entrackr, Google Trends work
+- [x] Business ideas report (10:30 AM): code + tests; new sources checked from the Mac (TechCrunch, Crunchbase, ET Startups, ET Small Business, Google Trends US, PIB, Reddit RSS all returned items). PIB English feed returns nothing, so the Hindi feed is used
+- [ ] Deploy (`AWS_PROFILE=personal ./deploy.sh`) and test run with `{"job":"market"}` and `{"job":"ideas"}`
+- [ ] Check which sources fail from AWS (listed at the bottom of the report). Reddit RSS rate-limits (429) and may block AWS IPs; if so, add a Reddit OAuth app
 
 ## Unverified, check on the first real run
 

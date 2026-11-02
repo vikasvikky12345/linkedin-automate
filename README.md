@@ -2,6 +2,9 @@
 
 Every day at 9 AM IST it reads your latest `/js-angular-prep` notes from this repo, has DeepSeek write 3 posts (carousel, puzzle image, tip image) and emails them to you. Posts you approve go out at 10 AM, 2 PM and 7 PM IST, one per slot.
 
+Every day at 10 AM IST it also emails a **market report**: business gaps, trends and funding news from Hacker News, Reddit, Product Hunt, Inc42, YourStory, Entrackr and Google Trends India, summarised by DeepSeek. At 10:30 AM IST a second email, **business ideas**, covers any kind of business (online, e-commerce, local/offline, services, startups) from TechCrunch, Crunchbase News, Economic Times, Inc42, Reddit, Google Trends India + US, Product Hunt, Hacker News and PIB. Each idea is tagged with a ₹ cost and side business / full-time, plus one deep dive.
+Each email links to its full report at `<AppUrl>report?type=market|ideas&key=<ADMIN_KEY>` (past days are linked at the bottom, and each report links to the other one).
+
 Runs on AWS: Lambda (+ Function URL for the approve page), EventBridge Scheduler, S3, SSM Parameter Store. Email goes through Resend, posts are written by DeepSeek.
 
 ## Safety: personal AWS account only
@@ -44,6 +47,12 @@ The scripts refuse to run on the `default` AWS CLI profile (that is the office a
 # draft + email now
 AWS_PROFILE=personal aws lambda invoke --function-name linkedin-agent --cli-binary-format raw-in-base64-out \
   --payload '{"job":"draft"}' --cli-read-timeout 300 /dev/stdout
+# market report now
+AWS_PROFILE=personal aws lambda invoke --function-name linkedin-agent --cli-binary-format raw-in-base64-out \
+  --payload '{"job":"market"}' --cli-read-timeout 300 /dev/stdout
+# business ideas report now
+AWS_PROFILE=personal aws lambda invoke --function-name linkedin-agent --cli-binary-format raw-in-base64-out \
+  --payload '{"job":"ideas"}' --cli-read-timeout 300 /dev/stdout
 # publish the next approved post now
 AWS_PROFILE=personal aws lambda invoke --function-name linkedin-agent --cli-binary-format raw-in-base64-out \
   --payload '{"job":"publish"}' /dev/stdout

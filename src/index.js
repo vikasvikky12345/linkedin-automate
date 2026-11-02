@@ -2,16 +2,16 @@ import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, List
 import { SSMClient, GetParametersByPathCommand } from '@aws-sdk/client-ssm';
 import { readFileSync } from 'node:fs';
 import { LambdaClient, GetFunctionUrlConfigCommand } from '@aws-sdk/client-lambda';
-import { littleText, nextApproved, validatePosts, cardHtml, slidesHtml, esc } from './lib.js';
+import { littleText, nextApproved, validatePosts, cardHtml, slidesHtml, esc, parseFeed, plainText, validateReport, marketHtml, ideasHtml } from './lib.js';
 
 const { BUCKET, GITHUB_REPO, LINKEDIN_VERSION } = process.env;
 const s3 = new S3Client({});
 const today = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); // IST
 
-// EventBridge Scheduler sends {"job": "draft" | "publish"}; everything else is a Function URL request.
+// EventBridge Scheduler sends {"job": "draft" | "publish" | "market" | "ideas"}; everything else is a Function URL request.
 export async function handler(event) {
   const env = await config();
-  if (event.job) return safely(env, event.job === 'draft' ? draft : publish);
+  if (event.job) return safely(env, { draft, publish, market, ideas }[event.job]);
 
   const q = event.queryStringParameters || {};
   if (event.rawPath === '/review') {
@@ -21,6 +21,7 @@ export async function handler(event) {
   }
   if (event.rawPath === '/auth') return startAuth(env, q);
   if (event.rawPath === '/callback') return finishAuth(env, q);
+  if (event.rawPath === '/report') return report(env, q);
   return { statusCode: 404, body: 'Not found' };
 }
 
@@ -318,6 +319,166 @@ async function publish(env) {
   });
   await del(`posts/${post.id}.json`);
   await del(`media/${post.id}`);
+}
+
+// ---------- 10 AM / 10:30 AM: market and business-ideas reports, emailed as a link ----------
+
+const UA = 'Mozilla/5.0 (compatible; market-report/1.0)';
+const ECOM_SUBS = 'r/smallbusiness+Entrepreneur+SaaS+StartUpIndia+ecommerce';
+const IDEA_SUBS = 'r/Entrepreneur+sidehustle+startups+indianstartups+smallbusiness';
+const ONLY_REAL_URLS = 'Every url must be copied exactly from the data below. Use null if nothing fits; never invent a link.';
+
+const REPORTS = {
+  market: {
+    title: 'Market report',
+    listKey: 'gaps',
+    html: marketHtml,
+    sources: (since) => ({
+      'Hacker News (Show HN)': () => hn(`tags=show_hn&numericFilters=created_at_i>${since}`),
+      'Hacker News (Ask HN)': () => hn(`tags=ask_hn&numericFilters=created_at_i>${since}`),
+      // Reddit's JSON API is 403 without OAuth; its RSS feeds are open.
+      'Reddit (top today)': () => feed(`https://www.reddit.com/${ECOM_SUBS}/top/.rss?t=day&limit=40`, 40),
+      'Reddit (asking for tools)': () =>
+        feed(`https://www.reddit.com/${ECOM_SUBS}/search.rss?restrict_sr=1&sort=new&t=week&limit=40&q=${encodeURIComponent('"is there a tool" OR "I wish there was" OR "looking for an app"')}`, 40),
+      'Product Hunt': () => feed('https://www.producthunt.com/feed'),
+      Inc42: () => feed('https://inc42.com/feed/'),
+      YourStory: () => feed('https://yourstory.com/feed'),
+      Entrackr: () => feed('https://entrackr.com/rss'),
+      'Google Trends India': () => feed('https://trends.google.com/trending/rss?geo=IN'),
+    }),
+    prompt: (data, recent) => `You are a market analyst for a software developer in India who builds warehouse and shipping software for Indian e-commerce sellers (WMS, courier aggregation, NDR, COD, RTO, Shopify/Amazon/Meesho channel integrations) and wants to start a profitable side business.
+
+Below is what people posted, launched, searched and funded in the last day. Find business opportunities in it.
+
+Return JSON only:
+{"headline":"one sentence: the most interesting signal today",
+ "gaps":[{"title":"short name of the gap","pain":"the problem people have, in their words where possible","who":"who would pay and roughly how much","build":"the smallest product or service that fills it","url":"the source url it came from"}],
+ "trends":[{"title":"...","note":"why it matters, one sentence","url":"..."}],
+ "funding":[{"title":"...","note":"what it says about where money is going","url":"..."}],
+ "idea":{"title":"...","pitch":"2 to 3 sentences","firstStep":"one concrete thing to do this week to validate it"}}
+
+Rules:
+- gaps: 3 to 6, best first. Prefer real pain someone would pay to fix over tech novelty. India-relevant gaps first.
+- ${ONLY_REAL_URLS}
+- trends: up to 5. funding: up to 5, Indian startups first.
+- idea: one opportunity that fits his logistics and e-commerce experience, inspired by today's data.
+- Plain, simple English. No hype words.
+- Avoid repeating these recent gaps: ${JSON.stringify(recent)}
+
+DATA:
+${data}`,
+  },
+  ideas: {
+    title: 'Business ideas',
+    listKey: 'ideas',
+    html: ideasHtml,
+    sources: (since) => ({
+      TechCrunch: () => feed('https://techcrunch.com/category/startups/feed/'),
+      'Crunchbase News': () => feed('https://news.crunchbase.com/feed/'),
+      'Economic Times Startups': () => feed('https://economictimes.indiatimes.com/tech/startups/rssfeeds/78570540.cms'),
+      'Economic Times Small Business': () => feed('https://economictimes.indiatimes.com/small-biz/rssfeeds/5575607.cms'),
+      Inc42: () => feed('https://inc42.com/feed/'),
+      'Reddit (top today)': () => feed(`https://www.reddit.com/${IDEA_SUBS}/top/.rss?t=day&limit=40`, 40),
+      'Reddit (would pay for)': () =>
+        feed(`https://www.reddit.com/${IDEA_SUBS}/search.rss?restrict_sr=1&sort=new&t=week&limit=40&q=${encodeURIComponent('"would pay for" OR "is there a service" OR "business idea"')}`, 40),
+      'Google Trends India': () => feed('https://trends.google.com/trending/rss?geo=IN'),
+      'Google Trends US': () => feed('https://trends.google.com/trending/rss?geo=US'),
+      'Product Hunt': () => feed('https://www.producthunt.com/feed'),
+      'Hacker News (Show HN)': () => hn(`tags=show_hn&numericFilters=created_at_i>${since}`),
+      'PIB (Government of India, Hindi)': () => feed('https://www.pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=3'),
+    }),
+    prompt: (data, recent) => `You are a business advisor for someone in India who wants to start a profitable business. It can be anything: an online business, selling products on e-commerce, a local or offline shop or service, a side hustle, or a funded startup. They are a software developer, but do not limit ideas to software. Budget is open and they have not decided between a side business and going full-time, so label every idea with both.
+
+Below is what people posted, launched, searched, funded and what the government announced in the last day (some items are in Hindi; always answer in English). Find business opportunities in it.
+
+Return JSON only:
+{"headline":"one sentence: the most interesting opportunity today",
+ "ideas":[{"title":"...","category":"online | ecommerce | local | service | startup","what":"what the business is, 1 to 2 sentences","why":"the signal in today's data that shows demand","url":"source url","cost":"startup cost in rupees, e.g. ₹20k-50k","time":"side business | full-time","money":"how it makes money, with rough pricing","firstStep":"one concrete thing to do this week to test it"}],
+ "funding":[{"title":"...","note":"what investors are paying for","url":"..."}],
+ "products":[{"title":"...","note":"why it could sell online now","url":"..."}],
+ "local":[{"title":"...","note":"the local or offline opportunity in India","url":"..."}],
+ "hustles":[{"title":"...","note":"the service people are asking to pay for","url":"..."}],
+ "deepDive":{"title":"the most promising idea above","customers":"who buys and how to reach them","competitors":"who already does it and their weak spot","numbers":"rough costs, price, margin and break-even","risks":"what could go wrong","firstStep":"what to do this week"}}
+
+Rules:
+- ideas: exactly 3, best first, from different categories. At least one should be cheap (under ₹50k) and one should not be software.
+- funding, products, local, hustles: up to 4 each; leave a list empty if today's data has nothing real for it.
+- Government items: only mention schemes, subsidies or rule changes that open a business opportunity.
+- ${ONLY_REAL_URLS}
+- India first. Plain, simple English. No hype words. Be honest about costs and risks.
+- Avoid repeating these recent ideas: ${JSON.stringify(recent)}
+
+DATA:
+${data}`,
+  },
+};
+
+const market = (env) => runReport(env, 'market');
+const ideas = (env) => runReport(env, 'ideas');
+
+async function runReport(env, type) {
+  const cfg = REPORTS[type];
+  const sources = cfg.sources(Math.floor(Date.now() / 1000) - 86400);
+  const names = Object.keys(sources);
+  const results = await Promise.allSettled(names.map((n) => sources[n]()));
+  const items = {};
+  const failed = [];
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled' && r.value.length) items[names[i]] = r.value;
+    else failed.push(`${names[i]} (${r.reason?.message || 'no items'})`);
+  });
+  if (!Object.keys(items).length) throw new Error(`Every source failed: ${failed.join('; ')}`);
+
+  const recent = (await get(`state/${type}-recent.json`)) || [];
+  const data = Object.entries(items)
+    .map(([name, list]) => `## ${name}\n${list.map((x) => `- ${x.title} | ${x.url} | ${x.text}`).join('\n')}`)
+    .join('\n\n');
+  const urls = new Set(Object.values(items).flat().map((x) => x.url));
+  const out = validateReport(await deepseek(env, [{ role: 'user', content: cfg.prompt(data, recent) }]), urls, cfg.listKey);
+  const r = { type, date: today(), ...out, sources: Object.keys(items), failed };
+  await put(`reports/${type}/${r.date}.json`, r);
+  await put(`state/${type}-recent.json`, [...r[cfg.listKey].map((x) => x.title), ...recent].slice(0, 30));
+
+  const link = reportUrl(env, type, r.date);
+  await email(env, `${cfg.title} ${r.date}: ${r[cfg.listKey].length} ${cfg.listKey}`, `<p><b>${esc(r.headline)}</b></p>
+    <ul>${r[cfg.listKey].map((x) => `<li>${esc(x.title)}</li>`).join('')}</ul>
+    <p><a href="${link}" style="font-size:18px">Open the full report</a></p>
+    ${failed.length ? `<p style="color:#64748b">Failed today: ${esc(failed.join('; '))}</p>` : ''}`);
+}
+
+async function fetchText(url) {
+  const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20e3) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.text();
+}
+
+const feed = async (url, max) => parseFeed(await fetchText(url), max);
+
+const hn = async (query) =>
+  JSON.parse(await fetchText(`https://hn.algolia.com/api/v1/search?${query}&hitsPerPage=25`)).hits.map((h) => ({
+    title: h.title,
+    url: `https://news.ycombinator.com/item?id=${h.objectID}`,
+    text: `${h.points} points. ${plainText(h.story_text || '')}`.slice(0, 300),
+  }));
+
+const reportUrl = (env, type, date) => `${env.APP_URL}/report?type=${type}&date=${date}&key=${env.ADMIN_KEY}`;
+
+// Protected by ADMIN_KEY like /auth; the key only travels in your own email.
+async function report(env, q) {
+  if (q.key !== env.ADMIN_KEY) return { statusCode: 403, body: 'Forbidden' };
+  const type = REPORTS[q.type] ? q.type : 'market';
+  const prefix = `reports/${type}/`;
+  const dates = (await list(prefix)).map((k) => k.slice(prefix.length, -'.json'.length)).sort().reverse();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(q.date || '') ? q.date : dates[0];
+  const r = date && (await get(`${prefix}${date}.json`));
+  if (!r) return html('<p>No report for that day yet.</p>');
+  const other = type === 'market' ? 'ideas' : 'market';
+  return html(
+    REPORTS[type].html(r, {
+      archive: dates.slice(0, 14).map((d) => ({ date: d, href: reportUrl(env, type, d) })),
+      other: { title: REPORTS[other].title, href: reportUrl(env, other, date) },
+    }),
+  );
 }
 
 // ---------- LinkedIn login (one click every ~60 days) ----------
