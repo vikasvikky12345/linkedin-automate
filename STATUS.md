@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-11-01
+Last updated: 2026-11-02
 
 ## Goal
 
@@ -54,8 +54,8 @@ Deployed and LinkedIn connected (2026-10-31), but **never run for real**. Next: 
 
 - [x] Code + tests (`npm test`); sources checked from the Mac: HN, Product Hunt, Inc42, YourStory, Entrackr, Google Trends work
 - [x] Business ideas report (10:30 AM): code + tests; new sources checked from the Mac (TechCrunch, Crunchbase, ET Startups, ET Small Business, Google Trends US, PIB, Reddit RSS all returned items). PIB English feed returns nothing, so the Hindi feed is used
-- [ ] Deploy (`AWS_PROFILE=personal ./deploy.sh`) and test run with `{"job":"market"}` and `{"job":"ideas"}`
-- [ ] Check which sources fail from AWS (listed at the bottom of the report). Reddit RSS rate-limits (429) and may block AWS IPs; if so, add a Reddit OAuth app
+- [x] Deployed 2026-11-02, test run of `market` and `ideas` both worked (emails + reports saved)
+- [ ] Reddit from AWS: the first Reddit feed works, the next ones get HTTP 429 (all other sources fine). Fix: Reddit OAuth app, or fetch Reddit feeds one by one with a pause
 
 ## Unverified, check on the first real run
 
