@@ -1,6 +1,6 @@
 # JS + Angular Interview Prep: Progress
 
-Started: 2026-10-28 | Last session: 2026-10-30 | Streak: 2 days | Done: 0/50
+Started: 2026-10-28 | Last session: 2026-11-04 | Streak: 3 days | Done: 0/50
 
 ## Topics
 Status: [ ] not started, [~] needs revision, [x] done (score)
@@ -9,7 +9,7 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 - [~] 1. Variables (var/let/const), scope, hoisting, TDZ (6.5/10; revision 1: 3.8/5; revision 2: 3.67/5, finished 3/3 on the last question; Topic 2 warm-up: 3/6. Re-test in the Topic 3 warm-up; Topic 3 warm-up: 1/4, typeof + TDZ missed)
 - [~] 2. Data types, type coercion, == vs ===, truthy/falsy, typeof quirks (6.5/10: puzzles 10.5/15, coding 6/10, scenarios 6.5/10; Topic 3 warm-up: 2.5/5, missed null == 0 again and 0 === -0)
 - [~] 3. Operators, short-circuit, ??, ?. (6.5/10: puzzles 13/14, coding 21.5/30, scenarios 3.5/10 avg)
-- [ ] 4. Functions: declaration vs expression, arrow functions, default/rest params
+- [ ] 4. Functions: declaration vs expression, arrow functions, default/rest params (in progress: warm-up 5.5/7, puzzles 11/15, once() 8.5/10; next: Problem 2 pipe, scenarios, score)
 - [ ] 5. Arrays & array methods
 - [ ] 6. Objects: destructuring, spread, shallow vs deep copy, structuredClone
 - [ ] 7. Strings & template literals
@@ -90,6 +90,12 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 - Topic 3: prototype pollution in setIn/merge helpers (__proto__ / constructor / prototype keys). Revisit in Topic 23.
 - Topic 3: skips the "explain why" and trade-off parts of questions (part b of scenario 1, operator choice in setIn).
 - Event loop: setTimeout is a Web API timer callback in the macrotask queue, not a Promise (covered in Topic 15).
+- Topics 1-3 (Topic 4 warm-up): null == 0 finally right (5.5/7). Still treated a SyntaxError as if earlier lines print; it fails at parse time, nothing prints.
+- Topic 4: STILL gives bare answers with no reasoning, even when told it's required (Puzzle 3 got half marks). Biggest habit to fix.
+- Topic 4: said regular functions "inherit this from their scope". Wrong: arrows take this from where they're written; regular functions from how they're called.
+- Topic 4: named function expression name is visible only inside its body; explained it as "because bar is a function".
+- Topic 4: write typeof results as strings ('undefined', 'function') and name error types (TypeError).
+- Topic 4: once() edge cases: fn throwing leaves it broken (called set first); fn = null for GC.
 
 ## Mock Interview Scores
 | Date | Focus | Score | Verdict |
@@ -103,3 +109,4 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 | 2026-10-29 | 1. Variables, scope, hoisting, TDZ | Revise 2 | 3.67/5 | Got the var-in-block case right once using the rewrite technique. Over-predicted errors once (paint → 'dark'). Final mixed question 3/3. |
 | 2026-10-29 | 2. Data types, coercion, ==/===, typeof | Full session | 6.5/10 | Warm-up (Topic 1) 3/6. Puzzles 10.5/15 (strong on [] + {}, string comparison; weak on Object.is, null >= 0, typeof typeof). getType 8/10, objectIs 9/10 after a hint, looseEqual not solved (showed answer). Scenarios: good on route param string vs number, weak fix code in the validation scenario. |
 | 2026-10-30 | 3. Operators, ??, ?., logical assignment | Full session | 6.5/10 | Warm-up 3.5/9 (T1 typeof+TDZ, T2 null == 0 missed again). Puzzles 13/14, strong on ?. chain short-circuit and ??= with a getter/setter. Coding: buildConfig 5/10, get 9/10, setIn 7.5/10 (missed prototype pollution). Scenarios 4/10 + 3/10: right diagnosis, but invalid fix syntax and the Number() ?? trap. |
+| 2026-11-04 | 4. Functions | Full session (in progress, 2026-11-02 to 11-04) | partial | Warm-up 5.5/7 (null == 0 right at last). Puzzles 11/15: all answers right, marks lost for no reasoning. once() 8.5/10, explained apply(this, args) and arrow this well. Left: pipe, scenarios, final score. |
