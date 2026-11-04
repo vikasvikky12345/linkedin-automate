@@ -5,12 +5,24 @@ Started: 2026-10-28 | Last session: 2026-11-04 | Streak: 3 days | Done: 1/50
 ## Topics
 Status: [ ] not started, [~] needs revision, [x] done (score)
 
+### Logic Building (added 2026-11-04, do first: approach problems, pick loops/methods, add checks, spot patterns, read code)
+- [ ] L1. Reading code: dry runs, trace tables, explaining code
+- [ ] L2. Loops: for / for...of / for...in / while, when to use which
+- [ ] L3. Conditions and checks: guard clauses, validation, edge-case checklist
+- [ ] L4. Accumulator pattern (loop, then reduce)
+- [ ] L5. Frequency counter with object/Map
+- [ ] L6. Array methods by intent (loop <-> method)
+- [ ] L7. Object methods: keys/values/entries/fromEntries, groupBy, lookup maps
+- [ ] L8. Two pointers and sliding window
+- [ ] L9. Nested data and basic recursion
+- [ ] L10. Mixed pattern-recognition round
+
 ### Part A: JavaScript
 - [~] 1. Variables (var/let/const), scope, hoisting, TDZ (6.5/10; revision 1: 3.8/5; revision 2: 3.67/5, finished 3/3 on the last question; Topic 2 warm-up: 3/6. Re-test in the Topic 3 warm-up; Topic 3 warm-up: 1/4, typeof + TDZ missed)
 - [~] 2. Data types, type coercion, == vs ===, truthy/falsy, typeof quirks (6.5/10: puzzles 10.5/15, coding 6/10, scenarios 6.5/10; Topic 3 warm-up: 2.5/5, missed null == 0 again and 0 === -0)
 - [~] 3. Operators, short-circuit, ??, ?. (6.5/10: puzzles 13/14, coding 21.5/30, scenarios 3.5/10 avg)
 - [x] 4. Functions: declaration vs expression, arrow functions, default/rest params (7.5/10: warm-up 5.5/7, puzzles 11/15, coding 17/20, scenarios 15.5/20)
-- [ ] 5. Arrays & array methods
+- [ ] 5. Arrays & array methods (paused for Logic Building: warm-up 3/4, puzzles 8.5/13, uniqueBy 9/10; resume at Problem 2 flatten)
 - [ ] 6. Objects: destructuring, spread, shallow vs deep copy, structuredClone
 - [ ] 7. Strings & template literals
 - [ ] 8. Execution context, call stack, lexical environment
@@ -98,6 +110,9 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 - Topic 4: once() edge cases: fn throwing leaves it broken (called set first); fn = null for GC.
 - Topic 4: leaves answers unfinished (Scenario 1c trade-off not answered, Scenario 2c guard code missing). Finish every part.
 - Topic 4: stops at the first fix. Missed: removeEventListener + bind silently fails (new function each time); memo cache key ignored options; unbounded cache growth.
+- Topic 5: sort without a comparator changes the order, never the values (wrote ['1','5',10]). === on objects compares references, not types.
+- Topic 5: [NaN].includes(NaN) is true (SameValueZero); indexOf gives -1. flat() flattens one level of EVERY item.
+- Logic building (self-reported 2026-11-04): hard to approach problems, pick a loop or method, add checks, spot patterns, read code. Logic Building track L1-L10 added.
 
 ## Mock Interview Scores
 | Date | Focus | Score | Verdict |
@@ -112,3 +127,4 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 | 2026-10-29 | 2. Data types, coercion, ==/===, typeof | Full session | 6.5/10 | Warm-up (Topic 1) 3/6. Puzzles 10.5/15 (strong on [] + {}, string comparison; weak on Object.is, null >= 0, typeof typeof). getType 8/10, objectIs 9/10 after a hint, looseEqual not solved (showed answer). Scenarios: good on route param string vs number, weak fix code in the validation scenario. |
 | 2026-10-30 | 3. Operators, ??, ?., logical assignment | Full session | 6.5/10 | Warm-up 3.5/9 (T1 typeof+TDZ, T2 null == 0 missed again). Puzzles 13/14, strong on ?. chain short-circuit and ??= with a getter/setter. Coding: buildConfig 5/10, get 9/10, setIn 7.5/10 (missed prototype pollution). Scenarios 4/10 + 3/10: right diagnosis, but invalid fix syntax and the Number() ?? trap. |
 | 2026-11-04 | 4. Functions | Full session (2026-11-02 to 11-04) | 7.5/10 | Warm-up 5.5/7 (null == 0 right at last). Puzzles 11/15: all right, marks lost for no reasoning. once 8.5, pipe 8.5 (fixed multi-arg first fn after a hint). Scenarios 7.5 + 8: excellent this/default-param diagnosis, missed bind+removeEventListener trade-off, cache key and growth, unfinished guard code. |
+| 2026-11-04 | 5. Arrays (paused) | Full session, partial | partial | Warm-up 3/4 (SyntaxError at parse time finally right). Puzzles 1.5/4, 2/5, then 5/5 once reasons were given. uniqueBy 9/10 (Set, O(n), did not name the Big-O). Paused: user asked for a logic-building plan first. |
