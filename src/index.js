@@ -169,7 +169,14 @@ ${progress}
 STUDY NOTES:
 ${notes.text}`;
 
-  const posts = validatePosts(await deepseek(env, [{ role: 'user', content: prompt }]));
+  // The model sometimes breaks the shape (e.g. a 2-slide carousel); ask again once before failing the day.
+  let posts;
+  try {
+    posts = validatePosts(await deepseek(env, [{ role: 'user', content: prompt }]));
+  } catch (e) {
+    console.error('bad draft, retrying', e);
+    posts = validatePosts(await deepseek(env, [{ role: 'user', content: prompt }]));
+  }
   console.log('before humanizer', JSON.stringify(posts.map((p) => p.text))); // to compare in the logs
   try {
     return await humanize(env, posts);
@@ -207,7 +214,8 @@ async function deepseek(env, messages) {
   const r = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'deepseek-chat', response_format: { type: 'json_object' }, messages }),
+    // deepseek-chat was retired 2026-07-24; thinking off keeps the old behaviour and cost.
+    body: JSON.stringify({ model: 'deepseek-flash', thinking: { type: 'disabled' }, response_format: { type: 'json_object' }, messages }),
   });
   if (!r.ok) throw new Error(`DeepSeek: ${r.status} ${await r.text()}`);
   return JSON.parse((await r.json()).choices[0].message.content);

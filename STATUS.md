@@ -11,7 +11,7 @@ Study with `/js-angular-prep` in Claude Code → the next morning at 9 AM IST, 3
 | Topic | Choice | Why |
 |---|---|---|
 | Hosting | AWS (Lambda, EventBridge Scheduler, S3, SSM) | Want AWS practice; tried Cloudflare first, replaced it |
-| Post writer | DeepSeek (`deepseek-chat`) | Already have the API key; cheapest |
+| Post writer | DeepSeek (`deepseek-flash`, thinking off) | Already have the API key; cheapest |
 | LinkedIn access | Own LinkedIn developer app (not Composio) | No third party holding the login; scheduled agent doesn't need an MCP |
 | Email | Resend (free) | SES can't reliably send from a @gmail.com address without my own domain |
 | Notes storage | This public repo (`notes/`, `progress.md`) | One repo for code and notes; "learning in public" |
