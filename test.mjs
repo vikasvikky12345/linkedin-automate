@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { littleText, nextApproved, validatePosts, validatePost,parseFeed, validateReport, marketHtml, ideasHtml } from './src/lib.js';
+import { littleText, nextApproved, validatePosts, validatePost, parseFeed, isPeak, llmCost, summarize, dashboardHtml, usd, validateReport, marketHtml, ideasHtml } from './src/lib.js';
 
 assert.equal(littleText('Use a?.b (safe) #JavaScript'), 'Use a?.b \\(safe\\) {hashtag|\\#|JavaScript}');
 assert.equal(littleText('x = [1] * 2_000'), 'x = \\[1\\] \\* 2\\_000');
@@ -37,4 +37,37 @@ assert.throws(() => validateReport({ gaps: [{ title: 'x' }] }, new Set(), 'ideas
 const ideasPage = ideasHtml({ date: '2026-11-02', ...ideas, sources: ['TechCrunch'], failed: [] }, { other: { title: 'Market report', href: 'https://app/r' } });
 assert.ok(ideasPage.includes('₹2-5L') && ideasPage.includes('full-time') && ideasPage.includes('Deep dive: d') && ideasPage.includes('Market report'));
 assert.ok(ideasPage.includes('<p>l: ') && !ideasPage.includes('https://fake') && !ideasPage.includes('Products to sell'));
+
+// Usage dashboard
+const wedPeak = new Date('2026-11-04T03:30:00Z'); // Wednesday 9 AM IST
+const satNight = new Date('2026-11-07T03:30:00Z');
+assert.ok(isPeak(wedPeak) && !isPeak(satNight) && !isPeak(new Date('2026-11-04T05:00:00Z')));
+const u = { prompt_tokens: 1_000_000, prompt_cache_hit_tokens: 0, prompt_cache_miss_tokens: 1_000_000, completion_tokens: 1_000_000 };
+assert.equal(llmCost('deepseek-flash', u, wedPeak).toFixed(2), '1.50');
+assert.equal(llmCost('deepseek-flash', u, satNight).toFixed(2), '0.75');
+assert.equal(llmCost('unknown', u, wedPeak), 0);
+const s = summarize(
+  {
+    llm: [
+      { date: '2026-11-05', job: 'draft', inTokens: 10, outTokens: 5, cost: 0.02 },
+      { date: '2026-11-05', job: 'draft', inTokens: 10, outTokens: 5, cost: 0.01 },
+    ],
+    runs: [
+      { sk: '2026-11-05T03:30:00Z#a', job: 'draft', ok: true, ms: 20000 },
+      { sk: '2026-11-05T04:30:00Z#b', job: 'edit', ok: false, ms: 1000, error: '<b>x</b>' },
+    ],
+    aws: [{ sk: '2026-11-04', total: 0.5, services: { 'AWS Lambda': 0.4, 'Amazon S3': 0.1 } }],
+    balance: { sk: '2026-11-05', amount: 8.1, currency: 'USD' },
+  },
+  '2026-11-05',
+);
+assert.equal(s.month.aws, 0.5);
+assert.equal(s.month.llm.toFixed(2), '0.03');
+assert.deepEqual(s.jobs.map((j) => [j.job, j.runs, j.failed, j.tokens]), [['draft', 1, 0, 30], ['edit', 1, 1, 0]]);
+assert.equal(s.runs[0].job, 'edit');
+const dash = dashboardHtml(s);
+assert.ok(dash.includes('$0.530') && dash.includes('&lt;b&gt;x&lt;/b&gt;') && dash.includes('AWS Lambda'));
+assert.ok(dashboardHtml(summarize({}, '2026-11-05')).includes('No data yet'));
+assert.equal(usd(0), '$0.00');
+
 console.log('ok');

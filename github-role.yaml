@@ -69,7 +69,7 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: [lambda:*, s3:*, logs:*, scheduler:*]
+                Action: [lambda:*, s3:*, logs:*, scheduler:*, dynamodb:*]
                 Resource: '*'
               - Effect: Allow # the SAM transform is expanded with this role's permissions too
                 Action: cloudformation:CreateChangeSet

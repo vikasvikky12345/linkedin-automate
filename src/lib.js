@@ -136,3 +136,107 @@ ${notes('Products to sell online', r.products)}
 ${notes('Local &amp; offline opportunities', r.local)}
 ${notes('Side hustles &amp; services', r.hustles)}
 ${footer(r, links)}`;
+
+// ---------- Usage dashboard ----------
+
+// DeepSeek USD per 1M tokens at peak (api-docs.deepseek.com/quick_start/pricing, Nov 2026); off-peak is half.
+const PRICES = {
+  'deepseek-flash': { hit: 0.006, miss: 0.3, out: 1.2 },
+  'deepseek-v4-pro': { hit: 0.044, miss: 1.32, out: 3.96 },
+};
+
+// Peak is 01:00-04:00 and 06:00-10:00 UTC, Monday to Friday. shortcut: ignores Chinese public holidays (off-peak), so those days read 2x high.
+export function isPeak(at) {
+  const h = at.getUTCHours();
+  const day = at.getUTCDay();
+  return day >= 1 && day <= 5 && ((h >= 1 && h < 4) || (h >= 6 && h < 10));
+}
+
+// usage is the "usage" object of a DeepSeek chat completion. Unknown models cost 0 until added to PRICES.
+export function llmCost(model, usage, at) {
+  const p = PRICES[model];
+  if (!p) return 0;
+  const hit = usage.prompt_cache_hit_tokens ?? 0;
+  const miss = usage.prompt_cache_miss_tokens ?? usage.prompt_tokens - hit;
+  return ((hit * p.hit + miss * p.miss + usage.completion_tokens * p.out) / 1e6) * (isPeak(at) ? 1 : 0.5);
+}
+
+// Turns the raw usage-table items into the dashboard numbers. today is "YYYY-MM-DD"; money is USD.
+export function summarize({ llm = [], runs = [], aws = [], balance }, today) {
+  const days = {};
+  const day = (date) => (days[date] ??= { date, aws: 0, llm: 0 });
+  const jobs = {};
+  const job = (name) => (jobs[name] ??= { job: name, runs: 0, failed: 0, tokens: 0, cost: 0 });
+  const services = {};
+
+  for (const a of aws) {
+    day(a.sk).aws = a.total;
+    if (a.sk.startsWith(today.slice(0, 7))) for (const [s, v] of Object.entries(a.services || {})) services[s] = (services[s] || 0) + v;
+  }
+  for (const u of llm) {
+    day(u.date).llm += u.cost;
+    const j = job(u.job);
+    j.tokens += u.inTokens + u.outTokens;
+    j.cost += u.cost;
+  }
+  for (const r of runs) {
+    job(r.job).runs++;
+    if (!r.ok) job(r.job).failed++;
+  }
+
+  const list = Object.values(days).sort((a, b) => a.date.localeCompare(b.date));
+  const inMonth = list.filter((d) => d.date.startsWith(today.slice(0, 7)));
+  return {
+    days: list,
+    today: days[today] || { date: today, aws: 0, llm: 0 },
+    month: { aws: inMonth.reduce((s, d) => s + d.aws, 0), llm: inMonth.reduce((s, d) => s + d.llm, 0) },
+    jobs: Object.values(jobs).sort((a, b) => b.cost - a.cost),
+    services: Object.entries(services).sort((a, b) => b[1] - a[1]),
+    runs: [...runs].sort((a, b) => b.sk.localeCompare(a.sk)).slice(0, 15),
+    balance,
+  };
+}
+
+export const usd = (n = 0) => '$' + (n >= 1 || n === 0 ? n.toFixed(2) : n.toFixed(3));
+
+export function dashboardHtml(s) {
+  const max = Math.max(0.001, ...s.days.map((d) => d.aws + d.llm));
+  const bars = s.days
+    .slice(-30)
+    .map(
+      (d) => `<div class="bar" title="${d.date}: AWS ${usd(d.aws)}, DeepSeek ${usd(d.llm)}">
+        <i style="height:${(d.llm / max) * 100}%;background:#6366f1"></i><i style="height:${(d.aws / max) * 100}%;background:#f59e0b"></i></div>`,
+    )
+    .join('');
+  const row = (cells) => `<tr>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
+  const bal = s.balance ? `${esc(s.balance.amount.toFixed(2))} ${esc(s.balance.currency)} <small>(${esc(s.balance.sk)})</small>` : 'not collected yet';
+  return `<style>
+    body{color:#0f172a;background:#fff} small,.muted{color:#64748b} h2{margin:28px 0 8px;font-size:18px}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+    .kpi{border:1px solid #e2e8f0;border-radius:10px;padding:12px} .kpi b{display:block;font-size:24px}
+    .chart{display:flex;align-items:flex-end;gap:2px;height:120px;border-bottom:1px solid #e2e8f0}
+    .bar{flex:1;height:100%;display:flex;flex-direction:column-reverse} .bar i{display:block}
+    table{width:100%;border-collapse:collapse;font-size:14px} td{padding:6px 4px;border-bottom:1px solid #f1f5f9}
+    tr:first-child td{font-weight:600;color:#64748b} td:not(:first-child){text-align:right;white-space:nowrap}
+    @media (prefers-color-scheme:dark){body{color:#e2e8f0;background:#0f172a}.kpi,.chart{border-color:#334155}td{border-color:#1e293b}}
+  </style>
+  <h1 style="font-size:22px">Spend and usage</h1>
+  <div class="kpis">
+    <div class="kpi">This month<b>${usd(s.month.aws + s.month.llm)}</b><small>AWS ${usd(s.month.aws)} · DeepSeek ${usd(s.month.llm)}</small></div>
+    <div class="kpi">Today<b>${usd(s.today.aws + s.today.llm)}</b><small>AWS shows up a day late</small></div>
+    <div class="kpi">DeepSeek balance<b style="font-size:18px">${bal}</b></div>
+  </div>
+  <h2>Daily cost, last 30 days</h2>
+  <div class="chart">${bars || '<span class="muted">No data yet</span>'}</div>
+  <small><span style="color:#f59e0b">■</span> AWS <span style="color:#6366f1">■</span> DeepSeek</small>
+  <h2>By job (last 35 days)</h2>
+  <table>${row(['Job', 'Runs', 'Tokens', 'Cost', 'Failed'])}${s.jobs
+    .map((j) => row([esc(j.job), j.runs, j.tokens.toLocaleString('en-IN'), usd(j.cost), j.failed || '']))
+    .join('')}</table>
+  <h2>AWS by service (this month)</h2>
+  <table>${s.services.map(([n, v]) => row([esc(n), usd(v)])).join('') || row(['<span class="muted">Not collected yet</span>'])}</table>
+  <h2>Recent runs</h2>
+  <table>${row(['When (UTC)', 'Job', 'Time', 'Result'])}${s.runs
+    .map((r) => row([esc(r.sk.slice(5, 16).replace('T', ' ')), esc(r.job), `${Math.round(r.ms / 1000)}s`, r.ok ? '✅' : `❌ <small>${esc(r.error || '')}</small>`]))
+    .join('')}</table>`;
+}

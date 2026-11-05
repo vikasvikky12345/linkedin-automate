@@ -2,16 +2,20 @@ import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, List
 import { SSMClient, GetParametersByPathCommand } from '@aws-sdk/client-ssm';
 import { readFileSync } from 'node:fs';
 import { LambdaClient, GetFunctionUrlConfigCommand } from '@aws-sdk/client-lambda';
-import { littleText, nextApproved, validatePosts, validatePost, cardHtml, slidesHtml, esc, parseFeed, plainText, validateReport, marketHtml, ideasHtml } from './lib.js';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { CostExplorerClient, GetCostAndUsageCommand } from '@aws-sdk/client-cost-explorer';
+import { littleText, nextApproved, validatePosts, validatePost, cardHtml, slidesHtml, esc, parseFeed, plainText, validateReport, marketHtml, ideasHtml, llmCost, summarize, dashboardHtml, usd } from './lib.js';
 
-const { BUCKET, GITHUB_REPO, LINKEDIN_VERSION } = process.env;
+const { BUCKET, TABLE, GITHUB_REPO, LINKEDIN_VERSION } = process.env;
 const s3 = new S3Client({});
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const today = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); // IST
 
-// EventBridge Scheduler sends {"job": "draft" | "publish" | "market" | "ideas"}; everything else is a Function URL request.
+// EventBridge Scheduler sends {"job": "draft" | "publish" | "market" | "ideas" | "costs"}; everything else is a Function URL request.
 export async function handler(event) {
   const env = await config();
-  if (event.job) return safely(env, { draft, publish, market, ideas, edit }[event.job], event);
+  if (event.job) return safely(env, { draft, publish, market, ideas, edit, costs }[event.job], event);
 
   const q = event.queryStringParameters || {};
   if (event.rawPath === '/review') {
@@ -22,6 +26,7 @@ export async function handler(event) {
   if (event.rawPath === '/auth') return startAuth(env, q);
   if (event.rawPath === '/callback') return finishAuth(env, q);
   if (event.rawPath === '/report') return report(env, q);
+  if (event.rawPath === '/dashboard') return dashboard(env, q);
   return { statusCode: 404, body: 'Not found' };
 }
 
@@ -41,12 +46,19 @@ async function config() {
 }
 
 // Errors are emailed, not thrown: a retry would draft and email a second batch.
+let running = 'web'; // the job in progress, so DeepSeek usage is logged against it (Lambda runs one event at a time)
 async function safely(env, job, event) {
+  running = job.name;
+  const start = Date.now();
+  let error;
   try {
     await job(env, event);
   } catch (e) {
+    error = e;
     console.error(e);
     await email(env, `LinkedIn agent failed: ${job.name}`, `<pre>${esc(e.stack || e.message)}</pre>`);
+  } finally {
+    await record({ pk: 'run', sk: stamp(), date: today(), job: job.name, ok: !error, ms: Date.now() - start, error: error?.message?.slice(0, 300) });
   }
 }
 
@@ -106,7 +118,8 @@ async function draft(env) {
         <p><a href="${env.APP_URL}/review?id=${p.id}&t=${p.token}">Review &amp; approve</a></p>`,
     )
     .join('');
-  await email(env, `3 LinkedIn posts for ${date}`, `${reconnect}<p>Approved posts go out at 10 AM, 2 PM and 7 PM, one per slot. Visuals are attached.</p>${body}`, saved.map((p, i) => ({
+  const spend = await spendLine(env).catch((e) => (console.error('spend line failed', e), '')); // never block the posts
+  await email(env, `3 LinkedIn posts for ${date}`, `${reconnect}${spend}<p>Approved posts go out at 10 AM, 2 PM and 7 PM, one per slot. Visuals are attached.</p>${body}`, saved.map((p, i) => ({
     filename: `${i + 1}-${p.kind}.${p.kind === 'carousel' ? 'pdf' : 'png'}`,
     content: Buffer.from(media[i]).toString('base64'),
   })));
@@ -212,15 +225,27 @@ ${JSON.stringify(posts.map((p) => p.text))}`,
   return posts.map((p, i) => (texts[i]?.startsWith('Learn JS with Vikas') ? { ...p, text: texts[i] } : p));
 }
 
+const MODEL = 'deepseek-flash';
+
 async function deepseek(env, messages) {
+  const start = Date.now();
   const r = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`, 'Content-Type': 'application/json' },
     // deepseek-chat was retired 2026-07-24; thinking off keeps the old behaviour and cost.
-    body: JSON.stringify({ model: 'deepseek-flash', thinking: { type: 'disabled' }, response_format: { type: 'json_object' }, messages }),
+    body: JSON.stringify({ model: MODEL, thinking: { type: 'disabled' }, response_format: { type: 'json_object' }, messages }),
   });
   if (!r.ok) throw new Error(`DeepSeek: ${r.status} ${await r.text()}`);
-  return JSON.parse((await r.json()).choices[0].message.content);
+  const res = await r.json();
+  const u = res.usage;
+  if (u) {
+    await record({
+      pk: 'llm', sk: stamp(), date: today(), job: running, model: MODEL, ms: Date.now() - start,
+      inTokens: u.prompt_tokens, cacheHitTokens: u.prompt_cache_hit_tokens ?? 0, outTokens: u.completion_tokens,
+      cost: llmCost(MODEL, u, new Date()),
+    });
+  }
+  return JSON.parse(res.choices[0].message.content);
 }
 
 // Chromium is ~60 MB, so it is only loaded on the 9 AM run.
@@ -540,6 +565,87 @@ async function report(env, q) {
       other: { title: REPORTS[other].title, href: reportUrl(env, other, date) },
     }),
   );
+}
+
+// ---------- Usage table: pk "llm" | "run" (sk = time), "aws" | "balance" (sk = date) ----------
+
+const stamp = () => `${new Date().toISOString()}#${crypto.randomUUID().slice(0, 8)}`;
+
+// Logging must never break a job, so failures are only printed.
+async function record(item) {
+  try {
+    const ttl = Math.floor(Date.now() / 1000) + 400 * 86400; // DynamoDB deletes items after ~13 months
+    await ddb.send(new PutCommand({ TableName: TABLE, Item: { ...item, ttl } }));
+  } catch (e) {
+    console.error('usage log failed', e);
+  }
+}
+
+// shortcut: no pagination (1 MB per query, thousands of items); page through LastEvaluatedKey once many agents log here.
+async function loadUsage(days) {
+  const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+  const query = async (pk, extra = { KeyConditionExpression: 'pk = :pk AND sk >= :since', ExpressionAttributeValues: { ':pk': pk, ':since': since } }) =>
+    (await ddb.send(new QueryCommand({ TableName: TABLE, ...extra }))).Items;
+  const [llm, runs, aws, [balance]] = await Promise.all([
+    query('llm'),
+    query('run'),
+    query('aws'),
+    query('balance', { KeyConditionExpression: 'pk = :pk', ExpressionAttributeValues: { ':pk': 'balance' }, ScanIndexForward: false, Limit: 1 }),
+  ]);
+  return { llm, runs, aws, balance };
+}
+
+const dashboardUrl = (env) => `${env.APP_URL}/dashboard?key=${env.ADMIN_KEY}`;
+
+async function dashboard(env, q) {
+  if (q.key !== env.ADMIN_KEY) return { statusCode: 403, body: 'Forbidden' };
+  return html(dashboardHtml(summarize(await loadUsage(35), today())));
+}
+
+const ALERT_PER_DAY = 1; // USD per day, AWS + DeepSeek
+const LOW_BALANCE = 2;
+
+// Yesterday in IST. AWS days are UTC, close enough for a daily total.
+async function yesterday() {
+  const date = new Date(Date.now() + 5.5 * 3600e3 - 864e5).toISOString().slice(0, 10);
+  return summarize(await loadUsage(3), today()).days.find((d) => d.date === date) || { date, aws: 0, llm: 0 };
+}
+
+async function spendLine(env) {
+  const y = await yesterday();
+  return `<p>Yesterday's spend: <b>${usd(y.aws + y.llm)}</b> (AWS ${usd(y.aws)}, DeepSeek ${usd(y.llm)}). <a href="${dashboardUrl(env)}">Dashboard</a></p>`;
+}
+
+// ---------- 8:45 AM: AWS + DeepSeek spend for the dashboard, alert email when over the limit ----------
+
+async function costs(env) {
+  const utcDay = (ago) => new Date(Date.now() - ago * 864e5).toISOString().slice(0, 10);
+  // Cost Explorer is $0.01 per call and only in us-east-1. One call refreshes the last 7 days, since recent days keep changing.
+  const ce = await new CostExplorerClient({ region: 'us-east-1' }).send(
+    new GetCostAndUsageCommand({
+      TimePeriod: { Start: utcDay(7), End: utcDay(0) },
+      Granularity: 'DAILY',
+      Metrics: ['UnblendedCost'],
+      GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
+    }),
+  );
+  for (const r of ce.ResultsByTime) {
+    const services = Object.fromEntries(r.Groups.map((g) => [g.Keys[0], Number(g.Metrics.UnblendedCost.Amount)]).filter(([, v]) => v > 0));
+    await record({ pk: 'aws', sk: r.TimePeriod.Start, total: Object.values(services).reduce((s, v) => s + v, 0), services });
+  }
+
+  const b = await fetch('https://api.deepseek.com/user/balance', { headers: { Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` } });
+  if (!b.ok) throw new Error(`DeepSeek balance: ${b.status} ${await b.text()}`);
+  const infos = (await b.json()).balance_infos || [];
+  const info = infos.find((i) => i.currency === 'USD') || infos[0];
+  if (info) await record({ pk: 'balance', sk: today(), amount: Number(info.total_balance), currency: info.currency });
+
+  const y = await yesterday();
+  const problems = [];
+  if (y.aws + y.llm > ALERT_PER_DAY) problems.push(`Yesterday's spend was <b>${usd(y.aws + y.llm)}</b> (AWS ${usd(y.aws)}, DeepSeek ${usd(y.llm)}), over your ${usd(ALERT_PER_DAY)}/day limit.`);
+  // shortcut: compares the number as is, so a CNY balance is checked against 2 CNY.
+  if (info && Number(info.total_balance) < LOW_BALANCE) problems.push(`DeepSeek balance is down to <b>${esc(info.total_balance)} ${esc(info.currency)}</b>. Top up at platform.deepseek.com.`);
+  if (problems.length) await email(env, 'Spend alert', `<p>${problems.join('</p><p>')}</p><p><a href="${dashboardUrl(env)}">Open the dashboard</a></p>`);
 }
 
 // ---------- LinkedIn login (one click every ~60 days) ----------

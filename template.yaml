@@ -19,6 +19,19 @@ Resources:
           - { Id: old-posts, Prefix: posts/, Status: Enabled, ExpirationInDays: 14 }
           - { Id: old-media, Prefix: media/, Status: Enabled, ExpirationInDays: 14 }
 
+  # Spend and usage for the dashboard (see "Usage table" in src/index.js).
+  Usage:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: pk, AttributeType: S }
+        - { AttributeName: sk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: pk, KeyType: HASH }
+        - { AttributeName: sk, KeyType: RANGE }
+      TimeToLiveSpecification: { AttributeName: ttl, Enabled: true }
+
   Logs:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -39,6 +52,7 @@ Resources:
       Environment:
         Variables:
           BUCKET: !Ref Bucket
+          TABLE: !Ref Usage
           GITHUB_REPO: !Ref GithubRepo
           LINKEDIN_VERSION: !Ref LinkedinVersion
       FunctionUrlConfig:
@@ -47,12 +61,16 @@ Resources:
         MaximumRetryAttempts: 0 # a retried draft would email a second batch
       Policies:
         - S3CrudPolicy: { BucketName: !Ref Bucket }
+        - DynamoDBCrudPolicy: { TableName: !Ref Usage }
         - Statement:
             - Effect: Allow
               Action: ssm:GetParametersByPath
               Resource:
                 - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/linkedin-agent
                 - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/linkedin-agent/*
+            - Effect: Allow
+              Action: ce:GetCostAndUsage
+              Resource: '*'
             - Effect: Allow
               Action: lambda:GetFunctionUrlConfig
               Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:linkedin-agent
@@ -77,6 +95,13 @@ Resources:
             ScheduleExpression: cron(0 10 * * ? *)
             ScheduleExpressionTimezone: Asia/Kolkata
             Input: '{"job":"market"}'
+            RetryPolicy: { MaximumRetryAttempts: 0 }
+        Costs:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(45 8 * * ? *) # before the 9 AM draft, whose email shows yesterday's spend
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Input: '{"job":"costs"}'
             RetryPolicy: { MaximumRetryAttempts: 0 }
         Ideas:
           Type: ScheduleV2
