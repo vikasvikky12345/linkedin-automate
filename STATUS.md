@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-11-02
+Last updated: 2026-11-05
 
 ## Goal
 
@@ -19,6 +19,7 @@ Study with `/js-angular-prep` in Claude Code → the next morning at 9 AM IST, 3
 | Video | Skipped | Paid tools, generic results; images and carousels instead |
 | Posting times | 10 AM, 2 PM, 7 PM IST | Posting all 3 at once hurts reach |
 | Market report | Same Lambda, `market` job at 10 AM IST; free RSS/API sources only; report saved in S3 `reports/`, page at `/report` behind `ADMIN_KEY` | No new accounts or keys; Amazon/G2/Statista block scraping, Upwork feeds are gone |
+| Spend dashboard | DynamoDB `Usage` table: every DeepSeek call (tokens, $) and job run logged; `costs` job at 8:45 AM IST pulls AWS Cost Explorer (usage before credits, last 7 days, $0.01/call) and the DeepSeek balance; page at `/dashboard?key=<ADMIN_KEY>`; 9 AM email shows yesterday's spend; alert email above $3/day or DeepSeek balance under $2 | Track AWS + LLM cost per agent now; base for a product later. Credits net AWS to ~$0, so usage is shown before credits |
 | Business ideas report | Second email at 10:30 AM (`ideas` job), same code path as `market` (`REPORTS` in `src/index.js`); every idea tagged with ₹ cost and side/full-time; reports in S3 `reports/<type>/` | Wanted any business, not only e-commerce; separate email keeps each one short. Budget and time not decided yet, so ideas are tagged, not filtered |
 
 ## Done
@@ -68,3 +69,13 @@ Deployed and LinkedIn connected (2026-10-31), but **never run for real**. Next: 
 
 - Before month 6: upgrade the AWS Free plan to Paid, or the account closes
 - Every ~60 days: reconnect LinkedIn (the daily email warns a week before)
+
+## Phone control and dashboard (added 2026-11-05)
+
+- [x] `edit` job: rewrite one post from an instruction, re-render the image, email it back as pending
+- [x] GitHub Actions: `deploy.yml` deploys on push to main, `job.yml` runs any job (draft/edit/publish/market/ideas) on demand. IAM roles in `github-role.yaml` (stack `linkedin-agent-github`); repo variable `AWS_ACCOUNT_ID`
+- [x] Spend dashboard deployed and checked: costs job, DeepSeek balance, `/dashboard` all work
+- [ ] Run `job.yml` once from the GitHub phone app (only tested from the laptop so far)
+- [ ] Check that a Claude Code cloud session can trigger `job.yml`
+- [ ] Phase 2: shared `llm()` / email / job helpers so new agents log usage to the same table with their own name
+

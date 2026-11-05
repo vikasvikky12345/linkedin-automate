@@ -222,7 +222,7 @@ export function dashboardHtml(s) {
   </style>
   <h1 style="font-size:22px">Spend and usage</h1>
   <div class="kpis">
-    <div class="kpi">This month<b>${usd(s.month.aws + s.month.llm)}</b><small>AWS ${usd(s.month.aws)} · DeepSeek ${usd(s.month.llm)}</small></div>
+    <div class="kpi">This month<b>${usd(s.month.aws + s.month.llm)}</b><small>AWS ${usd(s.month.aws)} · DeepSeek ${usd(s.month.llm)}<br>AWS before credits</small></div>
     <div class="kpi">Today<b>${usd(s.today.aws + s.today.llm)}</b><small>AWS shows up a day late</small></div>
     <div class="kpi">DeepSeek balance<b style="font-size:18px">${bal}</b></div>
   </div>
@@ -233,7 +233,7 @@ export function dashboardHtml(s) {
   <table>${row(['Job', 'Runs', 'Tokens', 'Cost', 'Failed'])}${s.jobs
     .map((j) => row([esc(j.job), j.runs, j.tokens.toLocaleString('en-IN'), usd(j.cost), j.failed || '']))
     .join('')}</table>
-  <h2>AWS by service (this month)</h2>
+  <h2>AWS by service (this month, before credits)</h2>
   <table>${s.services.map(([n, v]) => row([esc(n), usd(v)])).join('') || row(['<span class="muted">Not collected yet</span>'])}</table>
   <h2>Recent runs</h2>
   <table>${row(['When (UTC)', 'Job', 'Time', 'Result'])}${s.runs

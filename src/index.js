@@ -602,7 +602,7 @@ async function dashboard(env, q) {
   return html(dashboardHtml(summarize(await loadUsage(35), today())));
 }
 
-const ALERT_PER_DAY = 1; // USD per day, AWS + DeepSeek
+const ALERT_PER_DAY = 3; // USD/day, AWS (before credits) + DeepSeek. Normal is ~$2/day from other projects; $70/month budget is ~$2.3/day
 const LOW_BALANCE = 2;
 
 // Yesterday in IST. AWS days are UTC, close enough for a daily total.
@@ -627,6 +627,7 @@ async function costs(env) {
       Granularity: 'DAILY',
       Metrics: ['UnblendedCost'],
       GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
+      Filter: { Dimensions: { Key: 'RECORD_TYPE', Values: ['Usage'] } }, // real usage; free-plan credits would net it to ~0
     }),
   );
   for (const r of ce.ResultsByTime) {

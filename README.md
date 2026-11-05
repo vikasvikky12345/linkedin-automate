@@ -5,6 +5,10 @@ Every day at 9 AM IST it reads your latest `/js-angular-prep` notes from this re
 Every day at 10 AM IST it also emails a **market report**: business gaps, trends and funding news from Hacker News, Reddit, Product Hunt, Inc42, YourStory, Entrackr and Google Trends India, summarised by DeepSeek. At 10:30 AM IST a second email, **business ideas**, covers any kind of business (online, e-commerce, local/offline, services, startups) from TechCrunch, Crunchbase News, Economic Times, Inc42, Reddit, Google Trends India + US, Product Hunt, Hacker News and PIB. Each idea is tagged with a ₹ cost and side business / full-time, plus one deep dive.
 Each email links to its full report at `<AppUrl>report?type=market|ideas&key=<ADMIN_KEY>` (past days are linked at the bottom, and each report links to the other one).
 
+**Spend dashboard** at `<AppUrl>dashboard?key=<ADMIN_KEY>`: AWS cost per service (before credits), DeepSeek tokens and cost per job, recent runs and failures, DeepSeek balance. Collected daily at 8:45 AM IST; an alert email goes out above $3/day or when the DeepSeek balance drops under $2.
+
+**From the phone:** pushes to `main` deploy automatically (GitHub Actions). To edit a post or run a job now: GitHub app → Actions → run job → Run workflow (`edit` needs the post id from the email and an instruction).
+
 Runs on AWS: Lambda (+ Function URL for the approve page), EventBridge Scheduler, S3, SSM Parameter Store. Email goes through Resend, posts are written by DeepSeek.
 
 ## Safety: personal AWS account only
