@@ -18,12 +18,15 @@ export function nextApproved(posts) {
 export function validatePosts(data) {
   const posts = data?.posts;
   if (!Array.isArray(posts) || posts.length !== 3) throw new Error('Model must return exactly 3 posts');
-  for (const p of posts) {
-    if (!p.text || typeof p.text !== 'string') throw new Error('Post missing text');
-    if (p.kind === 'carousel' && !(p.slides?.length >= 3)) throw new Error('Carousel needs 3+ slides');
-    if (p.kind !== 'carousel' && !p.card?.title) throw new Error('Image post needs a card');
-  }
+  posts.forEach(validatePost);
   return posts;
+}
+
+export function validatePost(p) {
+  if (!p.text || typeof p.text !== 'string') throw new Error('Post missing text');
+  if (p.kind === 'carousel' && !(p.slides?.length >= 3)) throw new Error('Carousel needs 3+ slides');
+  if (p.kind !== 'carousel' && !p.card?.title) throw new Error('Image post needs a card');
+  return p;
 }
 
 export const esc = (s = '') =>

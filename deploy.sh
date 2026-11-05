@@ -12,5 +12,6 @@ fi
 
 (cd src && npm ci --omit=dev --silent)
 aws cloudformation package --template-file template.yaml --s3-bucket "$ARTIFACTS" --output-template-file .packaged.yaml
-aws cloudformation deploy --template-file .packaged.yaml --stack-name linkedin-agent --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+aws cloudformation deploy --template-file .packaged.yaml --stack-name linkedin-agent --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+  ${CFN_ROLE:+--role-arn "$CFN_ROLE"}
 aws cloudformation describe-stacks --stack-name linkedin-agent --query "Stacks[0].Outputs" --output table

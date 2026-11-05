@@ -1,0 +1,31 @@
+name: deploy
+
+# Every push to main that touches the Lambda goes live. Notes pushes from /js-angular-prep don't deploy.
+on:
+  push:
+    branches: [main]
+    paths: [src/**, template.yaml, deploy.sh, guard.sh, test.mjs]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency: deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/linkedin-agent-github
+          aws-region: ap-south-1
+      - run: ./deploy.sh
+        env:
+          CFN_ROLE: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/linkedin-agent-cfn

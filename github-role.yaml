@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lets GitHub Actions on main of linkedin-automate deploy the linkedin-agent stack and run its jobs
+
+# Deployed once from the laptop: ./github-role.sh
+
+Parameters:
+  Repo:
+    Type: String
+    Default: vikasvikky12345/linkedin-automate
+
+Resources:
+  # Assumed only by GitHub Actions running on the main branch of Repo.
+  GithubRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: linkedin-agent-github
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Federated: !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com' }
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${Repo}:ref:refs/heads/main'
+      Policies:
+        - PolicyName: deploy-and-run
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:GetTemplateSummary
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/linkedin-agent/*'
+              - Effect: Allow
+                Action: cloudformation:CreateChangeSet
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31'
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt CfnRole.Arn
+              - Effect: Allow
+                Action: [s3:ListBucket, s3:GetObject, s3:PutObject]
+                Resource:
+                  - !Sub 'arn:aws:s3:::new-linkedin-agent-artifacts-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::new-linkedin-agent-artifacts-${AWS::AccountId}/*'
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:linkedin-agent'
+
+  # CloudFormation uses this to create the stack's resources, so the GitHub role itself can't touch them directly.
+  # shortcut: limited to the services template.yaml uses today; add one here if the template gains a new service.
+  CfnRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: linkedin-agent-cfn
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cloudformation.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: stack-resources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [lambda:*, s3:*, logs:*, scheduler:*]
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:UpdateRole
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:PassRole
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:ListRolePolicies
+                  - iam:ListAttachedRolePolicies
+                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/linkedin-agent-Agent*'

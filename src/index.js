@@ -2,7 +2,7 @@ import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, List
 import { SSMClient, GetParametersByPathCommand } from '@aws-sdk/client-ssm';
 import { readFileSync } from 'node:fs';
 import { LambdaClient, GetFunctionUrlConfigCommand } from '@aws-sdk/client-lambda';
-import { littleText, nextApproved, validatePosts, cardHtml, slidesHtml, esc, parseFeed, plainText, validateReport, marketHtml, ideasHtml } from './lib.js';
+import { littleText, nextApproved, validatePosts, validatePost, cardHtml, slidesHtml, esc, parseFeed, plainText, validateReport, marketHtml, ideasHtml } from './lib.js';
 
 const { BUCKET, GITHUB_REPO, LINKEDIN_VERSION } = process.env;
 const s3 = new S3Client({});
@@ -11,7 +11,7 @@ const today = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 1
 // EventBridge Scheduler sends {"job": "draft" | "publish" | "market" | "ideas"}; everything else is a Function URL request.
 export async function handler(event) {
   const env = await config();
-  if (event.job) return safely(env, { draft, publish, market, ideas }[event.job]);
+  if (event.job) return safely(env, { draft, publish, market, ideas, edit }[event.job], event);
 
   const q = event.queryStringParameters || {};
   if (event.rawPath === '/review') {
@@ -41,9 +41,9 @@ async function config() {
 }
 
 // Errors are emailed, not thrown: a retry would draft and email a second batch.
-async function safely(env, job) {
+async function safely(env, job, event) {
   try {
-    await job(env);
+    await job(env, event);
   } catch (e) {
     console.error(e);
     await email(env, `LinkedIn agent failed: ${job.name}`, `<pre>${esc(e.stack || e.message)}</pre>`);
@@ -83,6 +83,8 @@ async function draft(env) {
       kind: p.kind,
       title: p.kind === 'carousel' ? p.slides[0].title : p.card.title,
       text: p.text,
+      slides: p.slides, // kept so the edit job can re-render the image
+      card: p.card,
       token: crypto.randomUUID(),
       status: 'pending',
     };
@@ -99,7 +101,7 @@ async function draft(env) {
       : '';
   const body = saved
     .map(
-      (p, i) => `<hr><h3>${i + 1}. ${esc(p.kind)}: ${esc(p.title)}</h3>
+      (p, i) => `<hr><h3>${i + 1}. ${esc(p.kind)}: ${esc(p.title)} (${p.id})</h3>
         <div style="white-space:pre-wrap;font-family:sans-serif">${esc(p.text)}</div>
         <p><a href="${env.APP_URL}/review?id=${p.id}&t=${p.token}">Review &amp; approve</a></p>`,
     )
@@ -246,6 +248,57 @@ async function render(posts) {
   } finally {
     await browser.close();
   }
+}
+
+// ---------- On demand ("run job" GitHub Action): rewrite one post from an instruction ----------
+
+async function edit(env, { id, instruction }) {
+  const post = /^[\w-]+$/.test(id || '') && (await get(`posts/${id}.json`));
+  if (!post) throw new Error(`No post ${id}: published, rejected, older than 14 days, or a wrong id.`);
+  if (!instruction?.trim()) throw new Error('Edit needs an instruction');
+
+  // Posts drafted before the edit job existed have no slides/card saved, so only their text can change.
+  const visual = Boolean(post.slides || post.card);
+  const old = { kind: post.kind, text: post.text, slides: post.slides, card: post.card };
+  const out = await deepseek(env, [
+    {
+      role: 'user',
+      content: `You edit one LinkedIn post. Apply this change and keep everything else as it is:
+${instruction}
+
+Return JSON only, ${visual ? 'the same shape as the post below' : '{"text":"..."}'}.
+Keep the first line "Learn JS with Vikas | ..." unless the change is about it, and keep the hashtags at the end.
+Slides and cards: no emoji, code at most 12 lines, 50 characters wide. A carousel keeps 6 to 8 slides.
+
+STYLE GUIDE FOR THE POST TEXT:
+${POST_STYLE}
+
+POST:
+${JSON.stringify(old)}`,
+    },
+  ]);
+  const next = visual ? validatePost({ ...old, ...out, kind: post.kind }) : { text: out.text };
+  if (!next.text || typeof next.text !== 'string') throw new Error('Edit returned no text');
+
+  const saved = {
+    ...post,
+    text: next.text,
+    ...(visual && { slides: next.slides, card: next.card, title: next.kind === 'carousel' ? next.slides[0].title : next.card.title }),
+    status: 'pending', // an edited post needs approving again
+  };
+  if (visual) await put(`media/${id}`, (await render([saved]))[0]);
+  await put(`posts/${id}.json`, saved);
+
+  const media = await get(`media/${id}`, 'bytes');
+  await email(
+    env,
+    `Edited post ${id}`,
+    `<p>Change: ${esc(instruction)}${visual ? '' : '<br><i>Only the text changed: this post was drafted before images could be re-rendered.</i>'}</p>
+    <h3>${esc(saved.kind)}: ${esc(saved.title)} (${id})</h3>
+    <div style="white-space:pre-wrap;font-family:sans-serif">${esc(saved.text)}</div>
+    <p><a href="${env.APP_URL}/review?id=${id}&t=${saved.token}">Review &amp; approve</a></p>`,
+    media ? [{ filename: `${id}.${saved.kind === 'carousel' ? 'pdf' : 'png'}`, content: Buffer.from(media).toString('base64') }] : [],
+  );
 }
 
 // ---------- Approve / reject ----------

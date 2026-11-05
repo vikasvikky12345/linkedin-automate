@@ -1,0 +1,43 @@
+name: run job
+
+# Runs one Lambda job on demand (from the phone: GitHub app > Actions > run job > Run workflow).
+# Results and errors arrive by email, like the scheduled runs.
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: draft = 3 new posts, edit = rewrite one post, publish = post the next approved one now
+        type: choice
+        options: [draft, edit, publish, market, ideas]
+        required: true
+      id:
+        description: 'edit only: post id from the email, e.g. 2026-11-05-1'
+        required: false
+      instruction:
+        description: 'edit only: what to change'
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency: job
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/linkedin-agent-github
+          aws-region: ap-south-1
+      # Inputs go through env, never straight into the script, so a quote in the instruction can't run shell code.
+      - env:
+          JOB: ${{ inputs.job }}
+          ID: ${{ inputs.id }}
+          INSTRUCTION: ${{ inputs.instruction }}
+        run: |
+          payload=$(jq -nc --arg job "$JOB" --arg id "$ID" --arg instruction "$INSTRUCTION" '{job: $job, id: $id, instruction: $instruction}')
+          aws lambda invoke --function-name linkedin-agent --cli-binary-format raw-in-base64-out \
+            --cli-read-timeout 0 --payload "$payload" out.json
+          echo "Done. Check your email for the result (errors are emailed too)."
