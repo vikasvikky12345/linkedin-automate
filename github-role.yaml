@@ -71,6 +71,9 @@ Resources:
               - Effect: Allow
                 Action: [lambda:*, s3:*, logs:*, scheduler:*]
                 Resource: '*'
+              - Effect: Allow # the SAM transform is expanded with this role's permissions too
+                Action: cloudformation:CreateChangeSet
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31'
               - Effect: Allow
                 Action:
                   - iam:CreateRole
