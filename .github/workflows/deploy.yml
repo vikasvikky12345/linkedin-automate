@@ -4,7 +4,7 @@ name: deploy
 on:
   push:
     branches: [main]
-    paths: [src/**, template.yaml, deploy.sh, guard.sh, test.mjs]
+    paths: [src/**, template.yaml, deploy.sh, guard.sh, test.mjs, .github/workflows/deploy.yml]
   workflow_dispatch:
 
 permissions:

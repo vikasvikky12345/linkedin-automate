@@ -3,13 +3,8 @@ Description: Lets GitHub Actions on main of linkedin-automate deploy the linkedi
 
 # Deployed once from the laptop: ./github-role.sh
 
-Parameters:
-  Repo:
-    Type: String
-    Default: vikasvikky12345/linkedin-automate
-
 Resources:
-  # Assumed only by GitHub Actions running on the main branch of Repo.
+  # Assumed only by GitHub Actions running on the main branch of linkedin-automate.
   GithubRole:
     Type: AWS::IAM::Role
     Properties:
@@ -24,7 +19,8 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub 'repo:${Repo}:ref:refs/heads/main'
+                # GitHub's subject includes owner and repo ids (seen in CloudTrail on a failed AssumeRoleWithWebIdentity).
+                token.actions.githubusercontent.com:sub: repo:vikasvikky12345@128349722/linkedin-automate@1440534972:ref:refs/heads/main
       Policies:
         - PolicyName: deploy-and-run
           PolicyDocument:
