@@ -7,7 +7,7 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 
 ### Logic Building (added 2026-11-04, do first: approach problems, pick loops/methods, add checks, spot patterns, read code)
 - [~] L1. Reading code: dry runs, trace tables, explaining code (6.5/10: trace 7, read-code 4, index check 7, problems 6.5/7/9.5, pattern spotting 6.5)
-- [ ] L2. Loops: for / for...of / for...in / while, when to use which
+- [x] L2. Loops: for / for...of / for...in / while, when to use which (7/10: trace 7, read-code 7.5, firstNegativeIndex 7.5, countDigits 6.5, topSubject 6.5, pattern spotting 8.75)
 - [ ] L3. Conditions and checks: guard clauses, validation, edge-case checklist
 - [ ] L4. Accumulator pattern (loop, then reduce)
 - [ ] L5. Frequency counter with object/Map
@@ -118,6 +118,13 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 - L1: lists edge cases without deciding the output (3 problems in a row); guard returned input instead of the promised type. Fixed by Problem 3.
 - L1: two-step patterns: "names of users older than 18" = filter THEN map (filter while the field still exists).
 - L1: skips the "why" in quick answers (pattern spotting, index check).
+- L2: fix rounds only half done (did about half of each fix list). Tick off every review item before sending.
+- L2: wrong expected values in test comments 3 problems in a row ('Math' vs 'math', stale values after changing the return). Work each one out from the rule.
+- L2: "nothing" value must match the return type: index -1, name null, count 0, list []. Returned {} / -1 / arrays from a name function.
+- L2: scope: missed the spec (returned the value, not the index) then added unrequested features (array support, return-all-ties). Build exactly the spec; ask if unsure.
+- L2: line order in traces: write each value AFTER its line runs (count++ was one behind); lines before the loop run once (thought `if (n === 0)` ran inside the loop).
+- L2: `while (num)` checks truthy/falsy, not "is it a number"; 0 is falsy and ends the loop.
+- L2: return vs console.log: a function returns its value with or without console.log.
 
 ## Mock Interview Scores
 | Date | Focus | Score | Verdict |
@@ -134,3 +141,4 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 | 2026-11-04 | 4. Functions | Full session (2026-11-02 to 11-04) | 7.5/10 | Warm-up 5.5/7 (null == 0 right at last). Puzzles 11/15: all right, marks lost for no reasoning. once 8.5, pipe 8.5 (fixed multi-arg first fn after a hint). Scenarios 7.5 + 8: excellent this/default-param diagnosis, missed bind+removeEventListener trade-off, cache key and growth, unfinished guard code. |
 | 2026-11-04 | 5. Arrays (paused) | Full session, partial | partial | Warm-up 3/4 (SyntaxError at parse time finally right). Puzzles 1.5/4, 2/5, then 5/5 once reasons were given. uniqueBy 9/10 (Set, O(n), did not name the Big-O). Paused: user asked for a logic-building plan first. |
 | 2026-11-08 | L1. Reading code, trace tables | Full session (2026-11-06 to 11-08) | 6.5/10 | Asked for a fuller framing twice. Trace slips (0 > 0, str[3]). Problems improved: reverseString 6.5, countVowels 7 (+ filter().length version), capitalizeWords 9.5 with all 5 steps and edge-case tests. Pattern spotting 2/3 (missed map after filter). |
+| 2026-11-08 | L2. Loops | Full session | 7/10 | Loop choice now solid (while for unknown steps, for for index, Object.entries for objects). Traced for...in '0012' right. countDigits needed a line-by-line trace to fix count++ order and the 0-is-falsy exit. Fix rounds half done; test expectations wrong 3 times; mixed 'nothing' types (-1, {}, arrays). |
