@@ -8,7 +8,7 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 ### Logic Building (added 2026-11-04, do first: approach problems, pick loops/methods, add checks, spot patterns, read code)
 - [~] L1. Reading code: dry runs, trace tables, explaining code (6.5/10: trace 7, read-code 4, index check 7, problems 6.5/7/9.5, pattern spotting 6.5)
 - [x] L2. Loops: for / for...of / for...in / while, when to use which (7/10: trace 7, read-code 7.5, firstNegativeIndex 7.5, countDigits 6.5, topSubject 6.5, pattern spotting 8.75)
-- [~] L3. Conditions and checks: guard clauses, validation, edge-case checklist (answers shown for problems 2-4, redo them unaided)
+- [~] L3. Conditions and checks: guard clauses, validation, edge-case checklist (answers shown for problems 2-4, redo them unaided. Coach session 2026-11-08 unaided parts: trace warm-up 7.5/9, read-code getInitials 8.5, safeDivide 7; pattern spotting answers 2-3 were also pasted review text)
 - [ ] L4. Accumulator pattern (loop, then reduce)
 - [ ] L5. Frequency counter with object/Map
 - [ ] L6. Array methods by intent (loop <-> method)
@@ -125,6 +125,13 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 - L2: line order in traces: write each value AFTER its line runs (count++ was one behind); lines before the loop run once (thought `if (n === 0)` ran inside the loop).
 - L2: `while (num)` checks truthy/falsy, not "is it a number"; 0 is falsy and ends the loop.
 - L2: return vs console.log: a function returns its value with or without console.log.
+- L3: in traces, wrote whether the input "passes" instead of the condition's real value (inverted all 3 guard rows for '9lives'). A guard returns when its condition is TRUE.
+- L3: Array.isArray([]) is true; thought the type guard catches empty arrays. Empty is a separate edge case. Also thought sumPositive("5") converts the string (the guard returns 0).
+- L3: Big-O: called one loop with fixed work per item O(n^2). Nested loop over the same data = n^2, otherwise O(n).
+- L3: skips method steps (hand-worked examples, all 6 checklist items, dry run, Big-O) unless given a tick-box checklist.
+- L3: tests on own data instead of the given data. Run the given data first.
+- L3: guard before Object.values/keys: Object.values(null) throws. Bad input returns the "nothing" of the return type (false for a boolean).
+- L3: REDO UNAIDED: isValidUsername, getActiveEmails (trim + lowercase + dedupe, loop and filter->map), validateSignup (collect all errors), and 3 fresh pattern-spotting items.
 - L3: compared values of different types in guards: `typeof a !== Number.isFinite(a)` (string vs boolean), `fullName !== String` (vs the function). Use `!Number.isFinite(a)` / `typeof x !== 'string'`.
 - L3: checked a literal instead of the input: `Array.isArray({})`. Used `.contains` (not a string method: `.includes`) and `part[i]` with no `i`.
 - L3: `a && b || c` runs as `(a && b) || c`; when ALL rules must hold, it's `&&` all the way. Each char range is its own `&&` pair, joined by `||`.
@@ -147,3 +154,4 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 | 2026-11-08 | L1. Reading code, trace tables | Full session (2026-11-06 to 11-08) | 6.5/10 | Asked for a fuller framing twice. Trace slips (0 > 0, str[3]). Problems improved: reverseString 6.5, countVowels 7 (+ filter().length version), capitalizeWords 9.5 with all 5 steps and edge-case tests. Pattern spotting 2/3 (missed map after filter). |
 | 2026-11-08 | L2. Loops | Full session | 7/10 | Loop choice now solid (while for unknown steps, for for index, Object.entries for objects). Traced for...in '0012' right. countDigits needed a line-by-line trace to fix count++ order and the 0-is-falsy exit. Fix rounds half done; test expectations wrong 3 times; mixed 'nothing' types (-1, {}, arrays). |
 | 2026-11-08 | L3. Conditions and checks | Practice problems | not scored | safeDivide: plan right, guard compared a string to a boolean (fixed). getInitials: 3 bugs. getActiveEmails: wrong Array.isArray target, .contains, && / || mix. isValidUsername, getActiveEmails v2 (lowercase, dedupe with Set, filter→map) and validateSignup (accumulator) were shown as full answers on request. Redo unaided before marking done. |
+| 2026-11-08 | L3. Conditions and checks | Coach session | partial | Unaided: trace 7.5/9 (B3/B4 reasons wrong), getInitials read+fix 8.5, safeDivide 7 (no Big-O/dry run). P2-P4 and pattern spotting submissions matched answers shown earlier, so not scored. Stays [~]; redo P2-P4 unaided next. |
