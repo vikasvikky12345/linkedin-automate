@@ -1,12 +1,12 @@
 # JS + Angular Interview Prep: Progress
 
-Started: 2026-10-28 | Last session: 2026-11-04 | Streak: 3 days | Done: 1/50
+Started: 2026-10-28 | Last session: 2026-11-08 | Streak: 3 days | Done: 1/50
 
 ## Topics
 Status: [ ] not started, [~] needs revision, [x] done (score)
 
 ### Logic Building (added 2026-11-04, do first: approach problems, pick loops/methods, add checks, spot patterns, read code)
-- [ ] L1. Reading code: dry runs, trace tables, explaining code
+- [~] L1. Reading code: dry runs, trace tables, explaining code (6.5/10: trace 7, read-code 4, index check 7, problems 6.5/7/9.5, pattern spotting 6.5)
 - [ ] L2. Loops: for / for...of / for...in / while, when to use which
 - [ ] L3. Conditions and checks: guard clauses, validation, edge-case checklist
 - [ ] L4. Accumulator pattern (loop, then reduce)
@@ -113,6 +113,11 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 - Topic 5: sort without a comparator changes the order, never the values (wrote ['1','5',10]). === on objects compares references, not types.
 - Topic 5: [NaN].includes(NaN) is true (SameValueZero); indexOf gives -1. flat() flattens one level of EVERY item.
 - Logic building (self-reported 2026-11-04): hard to approach problems, pick a loop or method, add checks, spot patterns, read code. Logic Building track L1-L10 added.
+- L1: traces the code it EXPECTS, not the code written (read 'abc'[3] as 'c', skipped the i = 0 row). Read every index from an index table; evaluate each condition with real values (0 > 0 is false).
+- L1: length vs last index: str[str.length] is undefined; backward loops start at length - 1.
+- L1: lists edge cases without deciding the output (3 problems in a row); guard returned input instead of the promised type. Fixed by Problem 3.
+- L1: two-step patterns: "names of users older than 18" = filter THEN map (filter while the field still exists).
+- L1: skips the "why" in quick answers (pattern spotting, index check).
 
 ## Mock Interview Scores
 | Date | Focus | Score | Verdict |
@@ -128,3 +133,4 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 | 2026-10-30 | 3. Operators, ??, ?., logical assignment | Full session | 6.5/10 | Warm-up 3.5/9 (T1 typeof+TDZ, T2 null == 0 missed again). Puzzles 13/14, strong on ?. chain short-circuit and ??= with a getter/setter. Coding: buildConfig 5/10, get 9/10, setIn 7.5/10 (missed prototype pollution). Scenarios 4/10 + 3/10: right diagnosis, but invalid fix syntax and the Number() ?? trap. |
 | 2026-11-04 | 4. Functions | Full session (2026-11-02 to 11-04) | 7.5/10 | Warm-up 5.5/7 (null == 0 right at last). Puzzles 11/15: all right, marks lost for no reasoning. once 8.5, pipe 8.5 (fixed multi-arg first fn after a hint). Scenarios 7.5 + 8: excellent this/default-param diagnosis, missed bind+removeEventListener trade-off, cache key and growth, unfinished guard code. |
 | 2026-11-04 | 5. Arrays (paused) | Full session, partial | partial | Warm-up 3/4 (SyntaxError at parse time finally right). Puzzles 1.5/4, 2/5, then 5/5 once reasons were given. uniqueBy 9/10 (Set, O(n), did not name the Big-O). Paused: user asked for a logic-building plan first. |
+| 2026-11-08 | L1. Reading code, trace tables | Full session (2026-11-06 to 11-08) | 6.5/10 | Asked for a fuller framing twice. Trace slips (0 > 0, str[3]). Problems improved: reverseString 6.5, countVowels 7 (+ filter().length version), capitalizeWords 9.5 with all 5 steps and edge-case tests. Pattern spotting 2/3 (missed map after filter). |
