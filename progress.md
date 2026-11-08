@@ -8,7 +8,7 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 ### Logic Building (added 2026-11-04, do first: approach problems, pick loops/methods, add checks, spot patterns, read code)
 - [~] L1. Reading code: dry runs, trace tables, explaining code (6.5/10: trace 7, read-code 4, index check 7, problems 6.5/7/9.5, pattern spotting 6.5)
 - [x] L2. Loops: for / for...of / for...in / while, when to use which (7/10: trace 7, read-code 7.5, firstNegativeIndex 7.5, countDigits 6.5, topSubject 6.5, pattern spotting 8.75)
-- [ ] L3. Conditions and checks: guard clauses, validation, edge-case checklist
+- [~] L3. Conditions and checks: guard clauses, validation, edge-case checklist (answers shown for problems 2-4, redo them unaided)
 - [ ] L4. Accumulator pattern (loop, then reduce)
 - [ ] L5. Frequency counter with object/Map
 - [ ] L6. Array methods by intent (loop <-> method)
@@ -125,6 +125,10 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 - L2: line order in traces: write each value AFTER its line runs (count++ was one behind); lines before the loop run once (thought `if (n === 0)` ran inside the loop).
 - L2: `while (num)` checks truthy/falsy, not "is it a number"; 0 is falsy and ends the loop.
 - L2: return vs console.log: a function returns its value with or without console.log.
+- L3: compared values of different types in guards: `typeof a !== Number.isFinite(a)` (string vs boolean), `fullName !== String` (vs the function). Use `!Number.isFinite(a)` / `typeof x !== 'string'`.
+- L3: checked a literal instead of the input: `Array.isArray({})`. Used `.contains` (not a string method: `.includes`) and `part[i]` with no `i`.
+- L3: `a && b || c` runs as `(a && b) || c`; when ALL rules must hold, it's `&&` all the way. Each char range is its own `&&` pair, joined by `||`.
+- L3: asked for the full answer on problems 2-4 (isValidUsername, getActiveEmails v2, validateSignup) instead of attempting. Redo them from the problem text.
 
 ## Mock Interview Scores
 | Date | Focus | Score | Verdict |
@@ -142,3 +146,4 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 | 2026-11-04 | 5. Arrays (paused) | Full session, partial | partial | Warm-up 3/4 (SyntaxError at parse time finally right). Puzzles 1.5/4, 2/5, then 5/5 once reasons were given. uniqueBy 9/10 (Set, O(n), did not name the Big-O). Paused: user asked for a logic-building plan first. |
 | 2026-11-08 | L1. Reading code, trace tables | Full session (2026-11-06 to 11-08) | 6.5/10 | Asked for a fuller framing twice. Trace slips (0 > 0, str[3]). Problems improved: reverseString 6.5, countVowels 7 (+ filter().length version), capitalizeWords 9.5 with all 5 steps and edge-case tests. Pattern spotting 2/3 (missed map after filter). |
 | 2026-11-08 | L2. Loops | Full session | 7/10 | Loop choice now solid (while for unknown steps, for for index, Object.entries for objects). Traced for...in '0012' right. countDigits needed a line-by-line trace to fix count++ order and the 0-is-falsy exit. Fix rounds half done; test expectations wrong 3 times; mixed 'nothing' types (-1, {}, arrays). |
+| 2026-11-08 | L3. Conditions and checks | Practice problems | not scored | safeDivide: plan right, guard compared a string to a boolean (fixed). getInitials: 3 bugs. getActiveEmails: wrong Array.isArray target, .contains, && / || mix. isValidUsername, getActiveEmails v2 (lowercase, dedupe with Set, filter→map) and validateSignup (accumulator) were shown as full answers on request. Redo unaided before marking done. |
