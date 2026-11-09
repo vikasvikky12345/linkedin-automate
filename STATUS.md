@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-11-09
+Last updated: 2026-11-09 (AWS posts upgrade built)
 
 ## Goal
 
@@ -96,7 +96,9 @@ Daily lineup (3 topics from `aws-topics.md`, one per post):
 - 7 PM: image, alternating days: cheat sheet / comparison table, or "What happens here?" puzzle (topic 3)
 
 Build order:
-- [ ] Phase 3: fetch the AWS docs page per topic at draft time, ground the prompt in it, add a "Source:" line
-- [ ] Phase 1: new slide types (SVG flow diagram from nodes/edges, comparison table, before/after config), own coloured service labels (no official AWS icons: their terms don't mention social media), cheat-sheet image kind
-- [ ] Phase 2: video kind: Chrome frame stepping of an HTML animation + ffmpeg layer to MP4, Lambda timeout 300 -> 900 s, LinkedIn Videos API upload (initializeUpload, 4 MB parts, finalizeUpload, wait for AVAILABLE), video in the review email
-- [ ] Redraft today's 3 old-style pending posts (2026-11-09-0..2) once Phase 1 is live
+- [x] Phase 3: each `aws-topics.md` line has its docs URL after ` | `; the draft fetches `<page>.md` (docs.aws.amazon.com serves markdown), grounds the prompt in it and adds "📖 Source: <url>" above the hashtags (also kept on edits). All 45 URLs checked 200 on 2026-11-09
+- [x] Phase 1: slides/cards render whatever fields they have: `diagram` (nodes/edges, top-to-bottom, long chains wrap into 2 columns), `before`/`after`, `table`; own coloured service labels per service family; `cheatsheet` kind; images are now 1080x1350
+- [x] Phase 2: `video` kind in `src/video.js`: steps `window.frame(t)` at 24 fps, pipes JPEG screenshots into `ffmpeg-static` (npm dep, not a layer) → H.264 MP4; Lambda timeout 900 s; LinkedIn Videos API upload in `publish`; MP4 attached to the review email. Rendered fine locally (20 s, ~1 MB, ~20 s render)
+- [x] Post style is now concept-first (what it is, how it works, analogy, when to use, common mistake); code only supports it. `src/post-style.md`
+- [x] Redrafted today's 3 posts (reset `state/aws-next.json` to 3, ran `draft`)
+- [ ] Unverified until the first real run: ffmpeg on Lambda, Videos API upload/finalize + AVAILABLE wait, 7 PM slot alternates cheat sheet / puzzle by day

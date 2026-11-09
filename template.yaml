@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Daily LinkedIn posts from js-angular-prep notes, approved by email
+Description: Daily "Learn AWS with Vikas" LinkedIn posts, approved by email
 
 Parameters:
   GithubRepo:
@@ -51,7 +51,7 @@ Resources:
       Runtime: nodejs22.x
       Architectures: [x86_64] # the npm chromium build is x86 only
       MemorySize: 2048
-      Timeout: 300
+      Timeout: 900 # the 2 PM video is ~600 rendered frames
       Tags: { project: linkedin-agent }
       Environment:
         Variables:

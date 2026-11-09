@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { littleText, nextApproved, validatePosts, validatePost, parseFeed, isPeak, llmCost, summarize, dashboardHtml, usd, validateReport, marketHtml, ideasHtml, pickTopics } from './src/lib.js';
+import { littleText, nextApproved, validatePosts, validatePost, parseFeed, isPeak, llmCost, summarize, dashboardHtml, usd, validateReport, marketHtml, ideasHtml, pickTopics, withSource, kindsFor, titleOf, layout, videoTimeline, videoHtml, slidesHtml, cardHtml } from './src/lib.js';
 
 assert.equal(littleText('Use a?.b (safe) #JavaScript'), 'Use a?.b \\(safe\\) {hashtag|\\#|JavaScript}');
 assert.equal(littleText('x = [1] * 2_000'), 'x = \\[1\\] \\* 2\\_000');
@@ -16,10 +16,48 @@ assert.throws(() => validatePosts({ posts: [{ text: 'x' }] }));
 assert.throws(() => validatePost({ kind: 'carousel', text: 'x', slides: [{}, {}] }), /3\+ slides/);
 assert.ok(validatePost({ kind: 'tip', text: 'x', card: { title: 't' } }));
 
-const topicsMd = '# AWS topics\nIntro line\n1. IAM roles\n2. S3 buckets\n3. Lambda\n4. DynamoDB\n';
-assert.deepEqual(pickTopics(topicsMd), { topics: ['IAM roles', 'S3 buckets', 'Lambda'], next: 3 });
-assert.deepEqual(pickTopics(topicsMd, 3), { topics: ['DynamoDB', 'IAM roles', 'S3 buckets'], next: 2 }); // wraps
+const topicsMd = '# AWS topics\nIntro line\n1. IAM roles | https://d/iam.html\n2. S3 buckets\n3. Lambda | https://d/l.html\n4. DynamoDB\n';
+const t = (name, url = null) => ({ name, url });
+assert.deepEqual(pickTopics(topicsMd), { topics: [t('IAM roles', 'https://d/iam.html'), t('S3 buckets'), t('Lambda', 'https://d/l.html')], next: 3 });
+assert.deepEqual(pickTopics(topicsMd, 3), { topics: [t('DynamoDB'), t('IAM roles', 'https://d/iam.html'), t('S3 buckets')], next: 2 }); // wraps
 assert.throws(() => pickTopics('1. only one'), /at least 3/);
+
+// Source line goes above the hashtags, once
+assert.equal(withSource('Hi\n\nQ? 👇\n\n#AWS #IAM', 'https://d/x'), 'Hi\n\nQ? 👇\n\n📖 Source: https://d/x\n\n#AWS #IAM');
+assert.equal(withSource('Hi', 'https://d/x'), 'Hi\n📖 Source: https://d/x\n');
+assert.equal(withSource('Hi https://d/x', 'https://d/x'), 'Hi https://d/x');
+assert.equal(withSource('Hi', null), 'Hi');
+
+// Slots: carousel, video, then cheat sheet / puzzle on alternate days
+assert.deepEqual(kindsFor('2026-11-09').slice(0, 2), ['carousel', 'video']);
+assert.notEqual(kindsFor('2026-11-09')[2], kindsFor('2026-11-10')[2]);
+assert.notEqual(kindsFor('2026-10-31')[2], kindsFor('2026-11-01')[2]); // across a 31-day month too
+
+// Video posts
+const diagram = { nodes: [{ id: 'u', label: 'You', service: 'User' }, { id: 'l', label: 'Function', service: 'Lambda' }, { id: 's', label: 'Bucket', service: 'S3' }], edges: [{ from: 'u', to: 'l', label: 'invoke' }, { from: 'l', to: 's' }, { from: 's', to: 'ghost' }] };
+const vid = { kind: 'video', text: 'x', video: { title: 'Flow', diagram, steps: [{ from: 'u', to: 'l', caption: 'a' }, { from: 'l', to: 's', caption: '<b>' }] } };
+assert.ok(validatePost(vid));
+assert.equal(titleOf(vid), 'Flow');
+assert.throws(() => validatePost({ ...vid, video: { ...vid.video, steps: [{ from: 'u', to: 'nope', caption: 'a' }, { from: 'u', to: 'l', caption: 'b' }] } }), /steps/);
+assert.throws(() => validatePost({ kind: 'video', text: 'x' }), /Video/);
+const lay = layout(diagram, 900, 600);
+assert.equal(lay.edges.length, 2); // edge to an unknown node is dropped
+const y = Object.fromEntries(lay.nodes.map((n) => [n.id, n.y]));
+assert.ok(y.u < y.l && y.l < y.s); // flows top to bottom
+assert.ok(lay.edges[0].y1 > y.u && lay.edges[0].y2 < y.l); // arrows start and end at the box edges
+assert.equal(layout({ nodes: [{ id: 'a' }, { id: 'b' }], edges: [{ from: 'a', to: 'b' }, { from: 'b', to: 'a' }] }, 900, 600).nodes.length, 2); // a cycle still lays out
+const chain = { nodes: 'abcdef'.split('').map((id) => ({ id, label: id })), edges: 'abcde'.split('').map((c, i) => ({ from: c, to: 'abcdef'[i + 1] })) };
+const wrapped = layout(chain, 900, 600);
+assert.equal(new Set(wrapped.nodes.map((n) => n.x)).size, 2); // 6 in a row wrap into 2 columns
+assert.ok(wrapped.h >= 100);
+assert.deepEqual([videoTimeline(2).total, videoTimeline(6).total, videoTimeline(9).total], [20, 26, 30]);
+const vp = videoHtml(vid.video);
+assert.ok(vp.includes('window.frame') && vp.includes('Lambda') && !vp.includes('"<b>"'));
+
+// Carousel / card blocks: diagram, before/after, table
+const deck = slidesHtml([{ title: 'Cover', diagram }, { title: 'Fix', before: 'old', after: 'new' }, { title: 'Cheat sheet', table: { rows: [['Role', '<temp creds>']] } }]);
+assert.ok(deck.includes('class="diagram"') && deck.includes('Before') && deck.includes('&lt;temp creds&gt;') && deck.includes('3 / 3'));
+assert.ok(cardHtml({ title: 'S3 cheat sheet', table: { columns: ['Class', 'Use'], rows: [['Standard', 'hot data']] } }).includes('<th>Class</th>'));
 
 const rss = `<rss><channel><title>Feed</title><item><title><![CDATA[Zepto raises $100M]]></title><link>https://x.in/a?b=1&amp;c=2</link>
 <description>&lt;p&gt;Quick &amp;amp; big&lt;/p&gt;</description></item></channel></rss>`;

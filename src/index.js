@@ -1,11 +1,12 @@
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { SSMClient, GetParametersByPathCommand } from '@aws-sdk/client-ssm';
 import { readFileSync } from 'node:fs';
+import { renderVideo } from './video.js';
 import { LambdaClient, GetFunctionUrlConfigCommand } from '@aws-sdk/client-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { CostExplorerClient, GetCostAndUsageCommand } from '@aws-sdk/client-cost-explorer';
-import { littleText, nextApproved, validatePosts, validatePost, cardHtml, slidesHtml, esc, parseFeed, plainText, validateReport, marketHtml, ideasHtml, llmCost, summarize, dashboardHtml, usd, pickTopics, SERIES } from './lib.js';
+import { littleText, nextApproved, validatePosts, validatePost, cardHtml, slidesHtml, esc, parseFeed, plainText, validateReport, marketHtml, ideasHtml, llmCost, summarize, dashboardHtml, usd, pickTopics, SERIES, withSource, kindsFor, titleOf, fileExt } from './lib.js';
 
 const { BUCKET, TABLE, GITHUB_REPO, LINKEDIN_VERSION } = process.env;
 const s3 = new S3Client({});
@@ -83,19 +84,21 @@ const list = async (Prefix) => ((await s3.send(new ListObjectsV2Command({ Bucket
 async function draft(env) {
   const { topics, next } = pickTopics(await github(env, 'aws-topics.md'), (await get('state/aws-next.json'))?.next ?? 0);
   const recent = (await get('state/recent.json')) || [];
-  const posts = await writePosts(env, topics, recent);
+  const date = today();
+  const posts = await writePosts(env, topics, recent, kindsFor(date));
 
   const media = await render(posts);
-  const date = today();
   const saved = [];
   for (const [i, p] of posts.entries()) {
     const post = {
       id: `${date}-${i}`,
       kind: p.kind,
-      title: p.kind === 'carousel' ? p.slides[0].title : p.card.title,
+      title: titleOf(p),
       text: p.text,
-      slides: p.slides, // kept so the edit job can re-render the image
+      source: p.source,
+      slides: p.slides, // kept so the edit job can re-render the media
       card: p.card,
+      video: p.video,
       token: crypto.randomUUID(),
       status: 'pending',
     };
@@ -115,12 +118,13 @@ async function draft(env) {
     .map(
       (p, i) => `<hr><h3>${i + 1}. ${esc(p.kind)}: ${esc(p.title)} (${p.id})</h3>
         <div style="white-space:pre-wrap;font-family:sans-serif">${esc(p.text)}</div>
+        ${p.source ? `<p>Check the facts against: <a href="${esc(p.source)}">${esc(p.source)}</a></p>` : ''}
         <p><a href="${env.APP_URL}/review?id=${p.id}&t=${p.token}">Review &amp; approve</a></p>`,
     )
     .join('');
   const spend = await spendLine(env).catch((e) => (console.error('spend line failed', e), '')); // never block the posts
-  await email(env, `3 LinkedIn posts for ${date}`, `${reconnect}${spend}<p>Approved posts go out at 10 AM, 2 PM and 7 PM, one per slot. Visuals are attached.</p>${body}`, saved.map((p, i) => ({
-    filename: `${i + 1}-${p.kind}.${p.kind === 'carousel' ? 'pdf' : 'png'}`,
+  await email(env, `3 LinkedIn posts for ${date}`, `${reconnect}${spend}<p>Approved posts go out at 10 AM (carousel), 2 PM (video) and 7 PM (image), one per slot. Visuals are attached.</p>${body}`, saved.map((p, i) => ({
+    filename: `${i + 1}-${p.kind}.${fileExt(p.kind)}`,
     content: Buffer.from(media[i]).toString('base64'),
   })));
 }
@@ -137,60 +141,79 @@ async function github(env, path, raw = true) {
   return raw ? r.text() : r.json();
 }
 
-async function writePosts(env, topics, recent) {
+// The AWS docs page for a topic as markdown (docs.aws.amazon.com serves <page>.md), so the post is grounded in it.
+async function docs(url) {
+  if (!url) return '';
+  try {
+    return (await fetchText(url.replace(/\.html$/, '.md'))).replace(/<[^>]+>/g, '').slice(0, 7000);
+  } catch (e) {
+    console.error('docs fetch failed', url, e); // a post without a source beats no email at all
+    return '';
+  }
+}
+
+async function writePosts(env, topics, recent, kinds) {
+  const sources = await Promise.all(topics.map((t) => docs(t.url)));
+  const third =
+    kinds[2] === 'cheatsheet'
+      ? `{"kind":"cheatsheet","text":"...","card":{"title":"<topic> cheat sheet","table":{"columns":["...","..."],"rows":[["...","..."]]},"footer":"Save this for later"}}`
+      : `{"kind":"puzzle","text":"...","card":{"title":"What happens here?","body":"one-line setup","code":"...","footer":"Answer in the comments"}}`;
   const prompt = `You write LinkedIn posts for a developer who builds serverless apps on AWS (Lambda, S3, DynamoDB, EventBridge, SAM) and is learning AWS in public.
 
 Write exactly 3 posts, one per AWS concept, in this order:
-1. carousel: ${topics[0]}
-2. puzzle: ${topics[1]}
-3. tip: ${topics[2]}
+1. carousel: ${topics[0].name}
+2. video: ${topics[1].name}
+3. ${kinds[2]}: ${topics[2].name}
 Avoid repeating these recent posts: ${JSON.stringify(recent)}
 
 Return JSON only:
 {"posts":[
- {"kind":"carousel","text":"...","slides":[{"title":"...","body":"...","code":"optional"}]},
- {"kind":"puzzle","text":"...","card":{"title":"What happens here?","code":"...","footer":"Answer in the comments"}},
- {"kind":"tip","text":"...","card":{"title":"...","body":"...","code":"optional"}}
+ {"kind":"carousel","text":"...","slides":[
+   {"title":"hook question or bold claim","diagram":{"nodes":[{"id":"a","label":"...","service":"..."}],"edges":[{"from":"a","to":"b","label":"optional"}]}},
+   {"title":"...","body":"...","code":"optional"},
+   {"title":"...","before":"config or code","after":"config or code","body":"optional, one line"},
+   {"title":"...","table":{"columns":["...","..."],"rows":[["...","..."]]}},
+   {"title":"Cheat sheet","table":{"rows":[["term","what to remember"]]}}]},
+ {"kind":"video","text":"...","video":{"title":"...","diagram":{"nodes":[...],"edges":[...]},"steps":[{"from":"a","to":"b","caption":"..."}],"outro":"one-line takeaway"}},
+ ${third}
 ]}
 
 Rules:
+- The goal is to make the concept click. Every post explains: what the thing is and the problem it solves, how it actually works step by step (the mental model), when to use it vs the alternative, and the one mistake beginners make. Explain like a good teacher to someone who has never used it; use a simple everyday analogy where it helps.
+- Ground every fact in the SOURCE for that topic below (official AWS docs). Do not state anything the source does not support. If the source is empty, stick to long-standing basics.
 - Every post text starts with the series line "${SERIES} | <topic in 2 to 5 words>", then a blank line, then the hook.
-- Hook: one or two short lines that make people click "see more" (only about 200 characters show). Use a different hook style for each of the 3 posts, picked from:
-  * Scenario: "Picture this: your Lambda works locally but times out after 3 seconds in AWS..." (a realistic problem, then "this is exactly what tripped me up while learning").
-  * Did you know: one surprising fact, e.g. "Did you know an explicit Deny in IAM beats every Allow?"
-  * Confession: "I left an S3 bucket public while learning. Here's what I check now."
-  * Quiz: "Quick one before your coffee: what happens here?"
-  * Myth vs fact: "Everyone says serverless means no servers. Not quite."
+- Hook: one or two short lines that make people click "see more" (only about 200 characters show). Use a different hook style for each of the 3 posts: scenario ("Picture this: ..."), did you know, confession ("while learning I ..."), quiz, or myth vs fact.
 - Never claim something happened at a job or with a real colleague or client. Scenarios are framed as "picture this", "imagine", or "while learning".
-- After the hook, really teach it: what the service or feature is for, how it actually behaves (the real rule), and the right way to use it or the common mistake. Short paragraphs, one idea each. A beginner should understand it without the image.
-- Facts must be correct and stable. Do not quote prices, free-tier amounts or quotas unless they are long-standing defaults (e.g. the Lambda maximum timeout is 15 minutes). When unsure, explain the idea without the number.
-- Code means real AWS code or config: AWS CLI commands, IAM policy JSON, SAM/CloudFormation YAML, or AWS SDK for JavaScript v3. Never invent CLI flags or API names.
-- End with a specific question that invites a comment (e.g. "Which of these 3 settings would you check first?"), never a generic "Thoughts?" or "Agree?". Then 3 to 5 hashtags like #AWS #LearnAWSWithVikas #Serverless #CloudComputing.
-- text: 900 to 1800 characters, plain text (no markdown, no **). A few arrows or numbers for steps are fine.
-- carousel: 6 to 8 slides. Slide 1 is a hook question or bold claim, then one idea per slide (what it is, how it works, when to use it, common mistake), last slide a 3-line summary plus "Follow for more ${SERIES}".
-- puzzle: a short scenario (a config, policy, command or setup) and the question "what happens?". Never reveal the answer in the card or post text; tell people to comment their answer with a one-line reason. The text can explain the concept around it without giving away the answer.
-- tip: one practical takeaway or a common mistake, with before/after config or code on the card.
+- Do not quote prices, free-tier amounts or quotas unless the source states them.
+- Code means real AWS code or config: AWS CLI commands, IAM policy JSON, SAM/CloudFormation YAML, or AWS SDK for JavaScript v3. Never invent CLI flags or API names. Code supports the explanation; it is not the point.
+- End with a specific question that invites a comment, never a generic "Thoughts?". Then 3 to 5 hashtags like #AWS #LearnAWSWithVikas #CloudComputing.
+- text: 1000 to 1900 characters, plain text (no markdown, no **). Do not add a source line; it is added for you.
+- Diagrams: 3 to 6 nodes in flow order, label 1 to 3 words, service a short AWS service name (Lambda, S3, IAM, VPC, ...) or a plain role (User, Internet, Laptop). Edge labels 1 to 3 words.
+- carousel: 8 to 10 slides. Slide 1: hook title plus a flow diagram of the concept. Then one idea per slide: what it is, how it works, an analogy, when to use it vs the alternative, a before/after slide (wrong vs right config), a comparison table, the common mistake. Last slide: the cheat sheet table (4 to 6 rows) with footer "Follow for more ${SERIES}".
+- video: a 20 to 30 second silent animation where a dot (the request or data) moves through the diagram. 4 to 7 steps, each moving along one edge from one node to the next, in order. caption: what happens at that step and why, max 90 characters, plain words. The text explains the same flow in more depth.
+- puzzle: a short scenario (config, policy, command) and "what happens?". Never reveal the answer in the card or text; ask people to comment their answer with a one-line reason. The text explains the concept around it without giving it away.
+- cheatsheet: one image that sums up the concept: 5 to 8 rows, 2 or 3 columns (e.g. term / what it does / when to use, or a side-by-side comparison). The text walks through the most important rows.
 - Honest learner voice, not guru claims.
-- Slides and cards: no emoji (the image renderer has no emoji font). Code at most 12 lines, 50 characters wide.
+- Slides, cards and captions: no emoji (the renderer has no emoji font). Code at most 10 lines, 48 characters wide; before/after at most 6 lines each. Table cells at most 40 characters.
+
+${topics.map((t, i) => `SOURCE for post ${i + 1} (${t.url || 'none'}):\n${sources[i] || '(empty)'}`).join('\n\n')}
 
 STYLE GUIDE FOR THE POST TEXT (wins over the rules above where they differ):
 ${POST_STYLE}`;
 
   // The model sometimes breaks the shape (e.g. a 2-slide carousel); ask again once before failing the day.
+  // kind comes from the slot, not the model, so a mislabelled post can't land in the wrong slot.
+  const ask = async () => validatePosts({ posts: (await deepseek(env, [{ role: 'user', content: prompt }]))?.posts?.map((p, i) => ({ ...p, kind: kinds[i] })) });
   let posts;
   try {
-    posts = validatePosts(await deepseek(env, [{ role: 'user', content: prompt }]));
+    posts = await ask();
   } catch (e) {
     console.error('bad draft, retrying', e);
-    posts = validatePosts(await deepseek(env, [{ role: 'user', content: prompt }]));
+    posts = await ask();
   }
   console.log('before humanizer', JSON.stringify(posts.map((p) => p.text))); // to compare in the logs
-  try {
-    return await humanize(env, posts);
-  } catch (e) {
-    console.error('humanize failed, keeping the first draft', e); // a worse text beats no email at all
-    return posts;
-  }
+  const human = await humanize(env, posts).catch((e) => (console.error('humanize failed, keeping the first draft', e), posts)); // a worse text beats no email at all
+  return human.map((p, i) => ({ ...p, source: topics[i].url, text: withSource(p.text, topics[i].url) }));
 }
 
 // Second pass with the humanizer skill (MIT, github.com/blader/humanizer) to strip AI writing tells.
@@ -255,8 +278,10 @@ async function render(posts) {
       if (p.kind === 'carousel') {
         await page.setContent(slidesHtml(p.slides));
         out.push(await page.pdf({ width: '1080px', height: '1350px', printBackground: true }));
+      } else if (p.kind === 'video') {
+        out.push(await renderVideo(page, p.video));
       } else {
-        await page.setViewport({ width: 1080, height: 1080 });
+        await page.setViewport({ width: 1080, height: 1350 });
         await page.setContent(cardHtml(p.card));
         out.push(await page.screenshot({ type: 'png' }));
       }
@@ -275,8 +300,8 @@ async function edit(env, { id, instruction }) {
   if (!instruction?.trim()) throw new Error('Edit needs an instruction');
 
   // Posts drafted before the edit job existed have no slides/card saved, so only their text can change.
-  const visual = Boolean(post.slides || post.card);
-  const old = { kind: post.kind, text: post.text, slides: post.slides, card: post.card };
+  const visual = Boolean(post.slides || post.card || post.video);
+  const old = { kind: post.kind, text: post.text, slides: post.slides, card: post.card, video: post.video };
   const out = await deepseek(env, [
     {
       role: 'user',
@@ -285,7 +310,7 @@ ${instruction}
 
 Return JSON only, ${visual ? 'the same shape as the post below' : '{"text":"..."}'}.
 Keep the first line (the "... with Vikas | ..." series line) unless the change is about it, and keep the hashtags at the end.
-Slides and cards: no emoji, code at most 12 lines, 50 characters wide. A carousel keeps 6 to 8 slides.
+Slides, cards and video captions: no emoji, code at most 10 lines, 48 characters wide. A carousel keeps 8 to 10 slides. Keep the "📖 Source:" line.
 
 STYLE GUIDE FOR THE POST TEXT:
 ${POST_STYLE}
@@ -299,8 +324,8 @@ ${JSON.stringify(old)}`,
 
   const saved = {
     ...post,
-    text: next.text,
-    ...(visual && { slides: next.slides, card: next.card, title: next.kind === 'carousel' ? next.slides[0].title : next.card.title }),
+    text: withSource(next.text, post.source),
+    ...(visual && { slides: next.slides, card: next.card, video: next.video, title: titleOf(next) }),
     status: 'pending', // an edited post needs approving again
   };
   if (visual) await put(`media/${id}`, (await render([saved]))[0]);
@@ -314,7 +339,7 @@ ${JSON.stringify(old)}`,
     <h3>${esc(saved.kind)}: ${esc(saved.title)} (${id})</h3>
     <div style="white-space:pre-wrap;font-family:sans-serif">${esc(saved.text)}</div>
     <p><a href="${env.APP_URL}/review?id=${id}&t=${saved.token}">Review &amp; approve</a></p>`,
-    media ? [{ filename: `${id}.${saved.kind === 'carousel' ? 'pdf' : 'png'}`, content: Buffer.from(media).toString('base64') }] : [],
+    media ? [{ filename: `${id}.${fileExt(saved.kind)}`, content: Buffer.from(media).toString('base64') }] : [],
   );
 }
 
@@ -364,39 +389,62 @@ async function publish(env) {
 
   const li = async (path, body) => {
     const r = await fetch(`https://api.linkedin.com/rest/${path}`, {
-      method: 'POST',
+      method: body ? 'POST' : 'GET',
       headers: {
         Authorization: `Bearer ${auth.token}`,
         'LinkedIn-Version': LINKEDIN_VERSION,
         'X-Restli-Protocol-Version': '2.0.0',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: body && JSON.stringify(body),
     });
     if (!r.ok) throw new Error(`LinkedIn ${path}: ${r.status} ${await r.text()}`);
     return r;
   };
 
-  const type = post.kind === 'carousel' ? 'documents' : 'images';
-  const init = await (await li(`${type}?action=initializeUpload`, { initializeUploadRequest: { owner: auth.urn } })).json();
-  const up = await fetch(init.value.uploadUrl, {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${auth.token}` },
-    body: await get(`media/${post.id}`, 'bytes'),
-  });
-  if (!up.ok) throw new Error(`LinkedIn upload: ${up.status} ${await up.text()}`);
+  const bytes = await get(`media/${post.id}`, 'bytes');
+  let mediaId;
+  if (post.kind === 'video') mediaId = await uploadVideo(li, auth, bytes);
+  else {
+    const type = post.kind === 'carousel' ? 'documents' : 'images';
+    const init = await (await li(`${type}?action=initializeUpload`, { initializeUploadRequest: { owner: auth.urn } })).json();
+    const up = await fetch(init.value.uploadUrl, { method: 'PUT', headers: { Authorization: `Bearer ${auth.token}` }, body: bytes });
+    if (!up.ok) throw new Error(`LinkedIn upload: ${up.status} ${await up.text()}`);
+    mediaId = init.value.image || init.value.document;
+  }
 
   await li('posts', {
     author: auth.urn,
     commentary: littleText(post.text),
     visibility: 'PUBLIC',
     distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] },
-    content: { media: { id: init.value.image || init.value.document, title: post.title } },
+    content: { media: { id: mediaId, title: post.title } },
     lifecycleState: 'PUBLISHED',
     isReshareDisabledByAuthor: false,
   });
   await del(`posts/${post.id}.json`);
   await del(`media/${post.id}`);
+}
+
+// Videos API: upload in the parts LinkedIn asks for (4 MB each), finalize with their ETags, then wait until it is AVAILABLE.
+async function uploadVideo(li, auth, bytes) {
+  const { value: v } = await (
+    await li('videos?action=initializeUpload', { initializeUploadRequest: { owner: auth.urn, fileSizeBytes: bytes.length, uploadCaptions: false, uploadThumbnail: false } })
+  ).json();
+  const etags = [];
+  for (const part of v.uploadInstructions) {
+    const r = await fetch(part.uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: bytes.subarray(part.firstByte, part.lastByte + 1) });
+    if (!r.ok) throw new Error(`LinkedIn video upload: ${r.status} ${await r.text()}`);
+    etags.push(r.headers.get('etag'));
+  }
+  await li('videos?action=finalizeUpload', { finalizeUploadRequest: { video: v.video, uploadToken: v.uploadToken || '', uploadedPartIds: etags } });
+  for (let i = 0; i < 60; i++) {
+    const { status } = await (await li(`videos/${encodeURIComponent(v.video)}`)).json();
+    if (status === 'AVAILABLE') return v.video;
+    if (status === 'PROCESSING_FAILED') throw new Error(`LinkedIn could not process video ${v.video}`);
+    await new Promise((ok) => setTimeout(ok, 5000));
+  }
+  throw new Error(`LinkedIn video ${v.video} still processing after 5 minutes`);
 }
 
 // ---------- 10 AM / 10:30 AM: market and business-ideas reports, emailed as a link ----------
