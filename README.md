@@ -1,6 +1,6 @@
 # LinkedIn agent
 
-Every day at 9 AM IST it reads your latest `/js-angular-prep` notes from this repo, has DeepSeek write 3 posts (carousel, puzzle image, tip image) and emails them to you. Posts you approve go out at 10 AM, 2 PM and 7 PM IST, one per slot.
+Every day at 9 AM IST it takes the next 3 topics from [aws-topics.md](aws-topics.md), has DeepSeek write one "Learn AWS with Vikas" post per topic (carousel, puzzle image, tip image) and emails them to you. Edit that list any time; the position is kept in S3 at `state/aws-next.json`. Posts you approve go out at 10 AM, 2 PM and 7 PM IST, one per slot.
 
 Every day at 10 AM IST it also emails a **market report**: business gaps, trends and funding news from Hacker News, Reddit, Product Hunt, Inc42, YourStory, Entrackr and Google Trends India, summarised by DeepSeek. At 10:30 AM IST a second email, **business ideas**, covers any kind of business (online, e-commerce, local/offline, services, startups) from TechCrunch, Crunchbase News, Economic Times, Inc42, Reddit, Google Trends India + US, Product Hunt, Hacker News and PIB. Each idea is tagged with a ₹ cost and side business / full-time, plus one deep dive.
 Each email links to its full report at `<AppUrl>report?type=market|ideas&key=<ADMIN_KEY>` (past days are linked at the bottom, and each report links to the other one).
@@ -69,7 +69,7 @@ AWS_PROFILE=personal aws logs tail /aws/lambda/linkedin-agent --since 1h
 Any failure sends you an email with the error. Common ones:
 - `LinkedIn ...: 426` or a version error: bump the `LinkedinVersion` default in `template.yaml` to a recent `YYYYMM` and redeploy.
 - `LinkedIn ...: 401`: the login expired. Open the `/auth` link again.
-- `No notes in the repo yet`: finish a `/js-angular-prep` session so it pushes a notes file.
+- `aws-topics.md needs at least 3 numbered topics`: the list is missing or has fewer than 3 `1. ...` lines.
 
 ## Cost
 

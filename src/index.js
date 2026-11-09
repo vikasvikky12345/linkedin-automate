@@ -5,7 +5,7 @@ import { LambdaClient, GetFunctionUrlConfigCommand } from '@aws-sdk/client-lambd
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { CostExplorerClient, GetCostAndUsageCommand } from '@aws-sdk/client-cost-explorer';
-import { littleText, nextApproved, validatePosts, validatePost, cardHtml, slidesHtml, esc, parseFeed, plainText, validateReport, marketHtml, ideasHtml, llmCost, summarize, dashboardHtml, usd } from './lib.js';
+import { littleText, nextApproved, validatePosts, validatePost, cardHtml, slidesHtml, esc, parseFeed, plainText, validateReport, marketHtml, ideasHtml, llmCost, summarize, dashboardHtml, usd, pickTopics, SERIES } from './lib.js';
 
 const { BUCKET, TABLE, GITHUB_REPO, LINKEDIN_VERSION } = process.env;
 const s3 = new S3Client({});
@@ -78,13 +78,12 @@ const put = (Key, body) =>
 const del = (Key) => s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key }));
 const list = async (Prefix) => ((await s3.send(new ListObjectsV2Command({ Bucket: BUCKET, Prefix }))).Contents || []).map((o) => o.Key);
 
-// ---------- 9 AM: write 3 posts from the latest prep notes and email them ----------
+// ---------- 9 AM: write 3 posts on the next 3 AWS topics and email them ----------
 
 async function draft(env) {
-  const notes = await latestNotes(env);
-  const progress = await github(env, 'progress.md');
+  const { topics, next } = pickTopics(await github(env, 'aws-topics.md'), (await get('state/aws-next.json'))?.next ?? 0);
   const recent = (await get('state/recent.json')) || [];
-  const posts = await writePosts(env, notes, progress, recent);
+  const posts = await writePosts(env, topics, recent);
 
   const media = await render(posts);
   const date = today();
@@ -105,6 +104,7 @@ async function draft(env) {
     saved.push(post);
   }
   await put('state/recent.json', [...saved.map((p) => p.title), ...recent].slice(0, 30));
+  await put('state/aws-next.json', { next }); // only after the posts are saved, so a failed day retries the same topics
 
   const auth = await get('state/li.json');
   const reconnect =
@@ -137,52 +137,44 @@ async function github(env, path, raw = true) {
   return raw ? r.text() : r.json();
 }
 
-async function latestNotes(env) {
-  const files = (await github(env, 'notes', false)).map((f) => f.name).filter((n) => n.endsWith('.md')).sort();
-  if (!files.length) throw new Error('No notes in the repo yet. Finish a /js-angular-prep session first.');
-  const name = files.at(-1);
-  return { date: name.slice(0, -3), text: await github(env, `notes/${name}`) };
-}
+async function writePosts(env, topics, recent) {
+  const prompt = `You write LinkedIn posts for a developer who builds serverless apps on AWS (Lambda, S3, DynamoDB, EventBridge, SAM) and is learning AWS in public.
 
-async function writePosts(env, notes, progress, recent) {
-  const prompt = `You write LinkedIn posts for a frontend developer who is preparing for JavaScript + Angular interviews and learning in public.
-
-Write exactly 3 posts from their latest study notes (${notes.date}). If the notes are not from yesterday, write revision posts: pick a different angle or a weak topic from the progress file.
+Write exactly 3 posts, one per AWS concept, in this order:
+1. carousel: ${topics[0]}
+2. puzzle: ${topics[1]}
+3. tip: ${topics[2]}
 Avoid repeating these recent posts: ${JSON.stringify(recent)}
 
 Return JSON only:
 {"posts":[
  {"kind":"carousel","text":"...","slides":[{"title":"...","body":"...","code":"optional"}]},
- {"kind":"puzzle","text":"...","card":{"title":"What does this print?","code":"...","footer":"Answer in the comments"}},
+ {"kind":"puzzle","text":"...","card":{"title":"What happens here?","code":"...","footer":"Answer in the comments"}},
  {"kind":"tip","text":"...","card":{"title":"...","body":"...","code":"optional"}}
 ]}
 
 Rules:
-- Every post text starts with the series line "Learn JS with Vikas | <topic in 2 to 5 words>", then a blank line, then the hook.
+- Every post text starts with the series line "${SERIES} | <topic in 2 to 5 words>", then a blank line, then the hook.
 - Hook: one or two short lines that make people click "see more" (only about 200 characters show). Use a different hook style for each of the 3 posts, picked from:
-  * Scenario: "Picture this: a form saves quantity 0 and the API gets 10 instead..." (a realistic bug from a real project, then "this is exactly what tripped me up in my prep").
-  * Did you know: one surprising fact, e.g. "Did you know null >= 0 is true but null == 0 is false?"
-  * Confession: "I got this wrong 3 times this week."
-  * Quiz: "Quick one before your coffee: what does this print?"
-  * Myth vs fact: "Everyone says ?? is just a safer ||. Not quite."
-- Never claim something happened at a job or with a real colleague or client. Scenarios are framed as "picture this", "imagine", or "in my prep today".
-- After the hook, really teach it: the problem, why JavaScript behaves that way (the actual rule), and the fix or the right mental model. Short paragraphs, one idea each. A beginner should understand it without the image.
-- End with a specific question that invites a comment (e.g. "Which of these 4 lines surprised you?"), never a generic "Thoughts?" or "Agree?". Then 3 to 5 hashtags like #JavaScript #LearnJSWithVikas.
+  * Scenario: "Picture this: your Lambda works locally but times out after 3 seconds in AWS..." (a realistic problem, then "this is exactly what tripped me up while learning").
+  * Did you know: one surprising fact, e.g. "Did you know an explicit Deny in IAM beats every Allow?"
+  * Confession: "I left an S3 bucket public while learning. Here's what I check now."
+  * Quiz: "Quick one before your coffee: what happens here?"
+  * Myth vs fact: "Everyone says serverless means no servers. Not quite."
+- Never claim something happened at a job or with a real colleague or client. Scenarios are framed as "picture this", "imagine", or "while learning".
+- After the hook, really teach it: what the service or feature is for, how it actually behaves (the real rule), and the right way to use it or the common mistake. Short paragraphs, one idea each. A beginner should understand it without the image.
+- Facts must be correct and stable. Do not quote prices, free-tier amounts or quotas unless they are long-standing defaults (e.g. the Lambda maximum timeout is 15 minutes). When unsure, explain the idea without the number.
+- Code means real AWS code or config: AWS CLI commands, IAM policy JSON, SAM/CloudFormation YAML, or AWS SDK for JavaScript v3. Never invent CLI flags or API names.
+- End with a specific question that invites a comment (e.g. "Which of these 3 settings would you check first?"), never a generic "Thoughts?" or "Agree?". Then 3 to 5 hashtags like #AWS #LearnAWSWithVikas #Serverless #CloudComputing.
 - text: 900 to 1800 characters, plain text (no markdown, no **). A few arrows or numbers for steps are fine.
-- carousel: 6 to 8 slides. Slide 1 is a hook question or bold claim, then one idea per slide (problem, why, fix, common mistake), last slide a 3-line summary plus "Follow for more Learn JS with Vikas".
-- puzzle: a short tricky snippet. Never reveal the answer in the card or post text; tell people to comment their answer with a one-line reason. The text can explain the concept around it without giving away the output.
-- tip: one practical takeaway or a mistake they made, with before/after code on the card.
+- carousel: 6 to 8 slides. Slide 1 is a hook question or bold claim, then one idea per slide (what it is, how it works, when to use it, common mistake), last slide a 3-line summary plus "Follow for more ${SERIES}".
+- puzzle: a short scenario (a config, policy, command or setup) and the question "what happens?". Never reveal the answer in the card or post text; tell people to comment their answer with a one-line reason. The text can explain the concept around it without giving away the answer.
+- tip: one practical takeaway or a common mistake, with before/after config or code on the card.
 - Honest learner voice, not guru claims.
 - Slides and cards: no emoji (the image renderer has no emoji font). Code at most 12 lines, 50 characters wide.
 
 STYLE GUIDE FOR THE POST TEXT (wins over the rules above where they differ):
-${POST_STYLE}
-
-PROGRESS FILE:
-${progress}
-
-STUDY NOTES:
-${notes.text}`;
+${POST_STYLE}`;
 
   // The model sometimes breaks the shape (e.g. a 2-slide carousel); ask again once before failing the day.
   let posts;
@@ -211,7 +203,7 @@ async function humanize(env, posts) {
     {
       role: 'user',
       content: `Embedded mode. Rewrite each LinkedIn post text below using the rules above. Keep for each post:
-- the first line "Learn JS with Vikas | ..." exactly as it is,
+- the first line "${SERIES} | ..." exactly as it is,
 - the hook's style (question, quiz, "Did you know", confession or scenario) and the closing question,
 - every technical fact, every code line exactly as written, the emojis, and the hashtags at the end.
 A LinkedIn post can use short paragraphs; that is not a tell. Do not add facts.
@@ -222,7 +214,7 @@ ${JSON.stringify(posts.map((p) => p.text))}`,
   ]);
   const texts = out?.texts;
   if (!Array.isArray(texts) || texts.length !== posts.length) throw new Error('humanizer returned the wrong shape');
-  return posts.map((p, i) => (texts[i]?.startsWith('Learn JS with Vikas') ? { ...p, text: texts[i] } : p));
+  return posts.map((p, i) => (texts[i]?.startsWith(SERIES) ? { ...p, text: texts[i] } : p));
 }
 
 const MODEL = 'deepseek-flash';
@@ -292,7 +284,7 @@ async function edit(env, { id, instruction }) {
 ${instruction}
 
 Return JSON only, ${visual ? 'the same shape as the post below' : '{"text":"..."}'}.
-Keep the first line "Learn JS with Vikas | ..." unless the change is about it, and keep the hashtags at the end.
+Keep the first line (the "... with Vikas | ..." series line) unless the change is about it, and keep the hashtags at the end.
 Slides and cards: no emoji, code at most 12 lines, 50 characters wide. A carousel keeps 6 to 8 slides.
 
 STYLE GUIDE FOR THE POST TEXT:

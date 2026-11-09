@@ -23,3 +23,4 @@ There are no AWS credentials in a cloud session. Everything goes through GitHub 
 - **Other jobs:** same workflow with `job=draft` (3 new posts), `publish` (next approved post now), `market`, `ideas`.
 - To trigger: `gh workflow run job.yml -f job=edit -f id=2026-11-05-1 -f instruction="..."`, or the GitHub API `POST /repos/vikasvikky12345/linkedin-automate/actions/workflows/job.yml/dispatches` with `{"ref":"main","inputs":{...}}`. If neither works from the session, tell the user to tap Actions > run job > Run workflow in the GitHub app and give them the exact values.
 - Post text rules live in `src/post-style.md`; changing that file changes every future post.
+- Posts are AWS-only for now: the 9 AM draft takes the next 3 topics from `aws-topics.md` (edit it to change what comes next, no deploy needed). Prep notes are not posted until JS/Angular resumes; see STATUS.md.

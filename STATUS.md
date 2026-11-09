@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-11-05
+Last updated: 2026-11-09
 
 ## Goal
 
@@ -15,7 +15,8 @@ Study with `/js-angular-prep` in Claude Code → the next morning at 9 AM IST, 3
 | LinkedIn access | Own LinkedIn developer app (not Composio) | No third party holding the login; scheduled agent doesn't need an MCP |
 | Email | Resend (free) | SES can't reliably send from a @gmail.com address without my own domain |
 | Notes storage | This public repo (`notes/`, `progress.md`) | One repo for code and notes; "learning in public" |
-| Post style | "Learn JS with Vikas" series, varied hooks, second DeepSeek pass with the MIT humanizer skill (`src/humanizer/`) | Posts read less like AI; no made-up job stories |
+| Post topic | AWS only for now (2026-11-09): 3 concepts a day from `aws-topics.md`, "Learn AWS with Vikas" series | Prep is on logic building, which isn't post material. Back to JS/Angular posts from the prep notes once the JS/Angular topics resume: revert the commit "Post AWS topics instead of JS prep notes" |
+| Post style | Series line, varied hooks, second DeepSeek pass with the MIT humanizer skill (`src/humanizer/`) | Posts read less like AI; no made-up job stories |
 | Video | Skipped | Paid tools, generic results; images and carousels instead |
 | Posting times | 10 AM, 2 PM, 7 PM IST | Posting all 3 at once hurts reach |
 | Market report | Same Lambda, `market` job at 10 AM IST; free RSS/API sources only; report saved in S3 `reports/`, page at `/report` behind `ADMIN_KEY` | No new accounts or keys; Amazon/G2/Statista block scraping, Upwork feeds are gone |

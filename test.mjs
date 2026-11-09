@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { littleText, nextApproved, validatePosts, validatePost, parseFeed, isPeak, llmCost, summarize, dashboardHtml, usd, validateReport, marketHtml, ideasHtml } from './src/lib.js';
+import { littleText, nextApproved, validatePosts, validatePost, parseFeed, isPeak, llmCost, summarize, dashboardHtml, usd, validateReport, marketHtml, ideasHtml, pickTopics } from './src/lib.js';
 
 assert.equal(littleText('Use a?.b (safe) #JavaScript'), 'Use a?.b \\(safe\\) {hashtag|\\#|JavaScript}');
 assert.equal(littleText('x = [1] * 2_000'), 'x = \\[1\\] \\* 2\\_000');
@@ -15,6 +15,11 @@ assert.equal(nextApproved([{ id: 'a', status: 'pending' }]), undefined);
 assert.throws(() => validatePosts({ posts: [{ text: 'x' }] }));
 assert.throws(() => validatePost({ kind: 'carousel', text: 'x', slides: [{}, {}] }), /3\+ slides/);
 assert.ok(validatePost({ kind: 'tip', text: 'x', card: { title: 't' } }));
+
+const topicsMd = '# AWS topics\nIntro line\n1. IAM roles\n2. S3 buckets\n3. Lambda\n4. DynamoDB\n';
+assert.deepEqual(pickTopics(topicsMd), { topics: ['IAM roles', 'S3 buckets', 'Lambda'], next: 3 });
+assert.deepEqual(pickTopics(topicsMd, 3), { topics: ['DynamoDB', 'IAM roles', 'S3 buckets'], next: 2 }); // wraps
+assert.throws(() => pickTopics('1. only one'), /at least 3/);
 
 const rss = `<rss><channel><title>Feed</title><item><title><![CDATA[Zepto raises $100M]]></title><link>https://x.in/a?b=1&amp;c=2</link>
 <description>&lt;p&gt;Quick &amp;amp; big&lt;/p&gt;</description></item></channel></rss>`;

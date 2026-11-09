@@ -32,7 +32,15 @@ export function validatePost(p) {
 export const esc = (s = '') =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-const BRAND = 'Learn JS with Vikas';
+export const SERIES = 'Learn AWS with Vikas';
+const BRAND = SERIES;
+
+// The next n topics from aws-topics.md (its "1. ..." lines), starting at index start; wraps to the top at the end.
+export function pickTopics(md, start = 0, n = 3) {
+  const all = md.split('\n').map((l) => l.match(/^\s*\d+\.\s+(.+)/)?.[1].trim()).filter(Boolean);
+  if (all.length < n) throw new Error(`aws-topics.md needs at least ${n} numbered topics`);
+  return { topics: Array.from({ length: n }, (_, i) => all[(start + i) % all.length]), next: (start + n) % all.length };
+}
 
 const STYLE = `
   * { margin: 0; box-sizing: border-box; }
