@@ -86,3 +86,17 @@ Deployed and LinkedIn connected (2026-10-31), but **never run for real**. Next: 
 - [x] `costs` job also pulls AWS cost by the `project` tag (second Cost Explorer call, $0.01/day); this stack's resources are tagged `project=linkedin-agent`
 - [ ] Activate the `project` cost-allocation tag in Billing (command in `../linkedin-service/README.md`); until then all AWS cost shows as "other (untagged)"
 
+
+## AWS posts upgrade (planned 2026-11-09, approved: build all 3 phases)
+
+Daily lineup (3 topics from `aws-topics.md`, one per post):
+- 9:00 AM email: 3 drafts + source links to review
+- 10 AM: carousel, 8-10 slides, flow diagram on the cover, cheat-sheet last slide (topic 1)
+- 2 PM: animated video, 20-30 s, 1080x1350 (4:5), silent with burned-in captions, request dot moving through the flow diagram (topic 2)
+- 7 PM: image, alternating days: cheat sheet / comparison table, or "What happens here?" puzzle (topic 3)
+
+Build order:
+- [ ] Phase 3: fetch the AWS docs page per topic at draft time, ground the prompt in it, add a "Source:" line
+- [ ] Phase 1: new slide types (SVG flow diagram from nodes/edges, comparison table, before/after config), own coloured service labels (no official AWS icons: their terms don't mention social media), cheat-sheet image kind
+- [ ] Phase 2: video kind: Chrome frame stepping of an HTML animation + ffmpeg layer to MP4, Lambda timeout 300 -> 900 s, LinkedIn Videos API upload (initializeUpload, 4 MB parts, finalizeUpload, wait for AVAILABLE), video in the review email
+- [ ] Redraft today's 3 old-style pending posts (2026-11-09-0..2) once Phase 1 is live
