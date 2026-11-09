@@ -1,6 +1,6 @@
 # JS + Angular Interview Prep: Progress
 
-Started: 2026-10-28 | Last session: 2026-11-08 | Streak: 3 days | Done: 1/50
+Started: 2026-10-28 | Last session: 2026-11-09 | Streak: 4 days | Done: 1/50
 
 ## Topics
 Status: [ ] not started, [~] needs revision, [x] done (score)
@@ -136,6 +136,9 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 - L3: checked a literal instead of the input: `Array.isArray({})`. Used `.contains` (not a string method: `.includes`) and `part[i]` with no `i`.
 - L3: `a && b || c` runs as `(a && b) || c`; when ALL rules must hold, it's `&&` all the way. Each char range is its own `&&` pair, joined by `||`.
 - L3: asked for the full answer on problems 2-4 (isValidUsername, getActiveEmails v2, validateSignup) instead of attempting. Redo them from the problem text.
+- L3 pattern spotting: "every value is a non-empty string" needs typeof v === 'string' && v !== ''; checking only '' lets 12/null/true through. Name it the "every" check (stop at first failure).
+- L3 pattern spotting: sum result is a number, so start/nothing value is 0, not []. reduce on [] with no start value throws.
+- L3 pattern spotting: lists an edge case ({}) without its decided output again ({} -> true, like [].every).
 
 ## Mock Interview Scores
 | Date | Focus | Score | Verdict |
@@ -155,3 +158,4 @@ Status: [ ] not started, [~] needs revision, [x] done (score)
 | 2026-11-08 | L2. Loops | Full session | 7/10 | Loop choice now solid (while for unknown steps, for for index, Object.entries for objects). Traced for...in '0012' right. countDigits needed a line-by-line trace to fix count++ order and the 0-is-falsy exit. Fix rounds half done; test expectations wrong 3 times; mixed 'nothing' types (-1, {}, arrays). |
 | 2026-11-08 | L3. Conditions and checks | Practice problems | not scored | safeDivide: plan right, guard compared a string to a boolean (fixed). getInitials: 3 bugs. getActiveEmails: wrong Array.isArray target, .contains, && / || mix. isValidUsername, getActiveEmails v2 (lowercase, dedupe with Set, filter→map) and validateSignup (accumulator) were shown as full answers on request. Redo unaided before marking done. |
 | 2026-11-08 | L3. Conditions and checks | Coach session | partial | Unaided: trace 7.5/9 (B3/B4 reasons wrong), getInitials read+fix 8.5, safeDivide 7 (no Big-O/dry run). P2-P4 and pattern spotting submissions matched answers shown earlier, so not scored. Stays [~]; redo P2-P4 unaided next. |
+| 2026-11-09 | L3. Conditions and checks | Pattern spotting | 1.5/3 | A sumPositive: accumulator, filter then reduce, right (said [] instead of 0). B allNonEmptyStrings: loop over values right, missed the typeof string check and the {} output. C firstNonDigitIndex: not attempted, answer shown (search with index, for (let i), return early, -1). |
