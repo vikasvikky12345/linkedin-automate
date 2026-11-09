@@ -162,7 +162,14 @@ export function llmCost(model, usage, at) {
 }
 
 // Turns the raw usage-table items into the dashboard numbers. today is "YYYY-MM-DD"; money is USD.
-export function summarize({ llm = [], runs = [], aws = [], balance }, today) {
+// llm/run rows from other projects carry an "agent" (e.g. linkedin-service) and maybe a "client"; rows without one are this project's.
+// awsProjects: daily AWS cost grouped by the "project" cost-allocation tag ("" = untagged, i.e. other projects in the account).
+export function summarize({ llm = [], runs = [], aws = [], awsProjects = [], balance }, today) {
+  const month = today.slice(0, 7);
+  const projects = {};
+  const project = (name) => (projects[name] ??= { project: name, aws: 0, llm: 0 });
+  for (const a of awsProjects) if (a.sk.startsWith(month)) for (const [p, v] of Object.entries(a.projects || {})) project(p || 'other (untagged)').aws += v;
+  const clients = {};
   const days = {};
   const day = (date) => (days[date] ??= { date, aws: 0, llm: 0 });
   const jobs = {};
@@ -173,15 +180,22 @@ export function summarize({ llm = [], runs = [], aws = [], balance }, today) {
     day(a.sk).aws = a.total;
     if (a.sk.startsWith(today.slice(0, 7))) for (const [s, v] of Object.entries(a.services || {})) services[s] = (services[s] || 0) + v;
   }
+  const jobName = (x) => (x.agent ? `${x.agent} / ${x.job}` : x.job);
   for (const u of llm) {
     day(u.date).llm += u.cost;
-    const j = job(u.job);
+    if (u.date.startsWith(month)) project(u.agent || 'linkedin-agent').llm += u.cost;
+    if (u.client) {
+      const c = (clients[u.client] ??= { client: u.client, tokens: 0, cost: 0 });
+      c.tokens += u.inTokens + u.outTokens;
+      c.cost += u.cost;
+    }
+    const j = job(jobName(u));
     j.tokens += u.inTokens + u.outTokens;
     j.cost += u.cost;
   }
   for (const r of runs) {
-    job(r.job).runs++;
-    if (!r.ok) job(r.job).failed++;
+    job(jobName(r)).runs++;
+    if (!r.ok) job(jobName(r)).failed++;
   }
 
   const list = Object.values(days).sort((a, b) => a.date.localeCompare(b.date));
@@ -193,6 +207,8 @@ export function summarize({ llm = [], runs = [], aws = [], balance }, today) {
     jobs: Object.values(jobs).sort((a, b) => b.cost - a.cost),
     services: Object.entries(services).sort((a, b) => b[1] - a[1]),
     runs: [...runs].sort((a, b) => b.sk.localeCompare(a.sk)).slice(0, 15),
+    projects: Object.values(projects).sort((a, b) => b.aws + b.llm - (a.aws + a.llm)),
+    clients: Object.values(clients).sort((a, b) => b.cost - a.cost),
     balance,
   };
 }
@@ -229,6 +245,13 @@ export function dashboardHtml(s) {
   <h2>Daily cost, last 30 days</h2>
   <div class="chart">${bars || '<span class="muted">No data yet</span>'}</div>
   <small><span style="color:#f59e0b">■</span> AWS <span style="color:#6366f1">■</span> DeepSeek</small>
+  <h2>By project (this month)</h2>
+  <table>${row(['Project', 'AWS', 'DeepSeek', 'Total'])}${s.projects
+    .map((p) => row([esc(p.project), usd(p.aws), usd(p.llm), `<b>${usd(p.aws + p.llm)}</b>`]))
+    .join('')}</table>
+  <small>AWS split by the "project" cost-allocation tag; untagged is everything else in the account.</small>
+  ${s.clients.length ? `<h2>linkedin-service clients (DeepSeek, last 35 days)</h2>
+  <table>${row(['Client', 'Tokens', 'Cost'])}${s.clients.map((c) => row([esc(c.client), c.tokens.toLocaleString('en-IN'), usd(c.cost)])).join('')}</table>` : ''}
   <h2>By job (last 35 days)</h2>
   <table>${row(['Job', 'Runs', 'Tokens', 'Cost', 'Failed'])}${s.jobs
     .map((j) => row([esc(j.job), j.runs, j.tokens.toLocaleString('en-IN'), usd(j.cost), j.failed || '']))
@@ -237,6 +260,6 @@ export function dashboardHtml(s) {
   <table>${s.services.map(([n, v]) => row([esc(n), usd(v)])).join('') || row(['<span class="muted">Not collected yet</span>'])}</table>
   <h2>Recent runs</h2>
   <table>${row(['When (UTC)', 'Job', 'Time', 'Result'])}${s.runs
-    .map((r) => row([esc(r.sk.slice(5, 16).replace('T', ' ')), esc(r.job), `${Math.round(r.ms / 1000)}s`, r.ok ? '✅' : `❌ <small>${esc(r.error || '')}</small>`]))
+    .map((r) => row([esc(r.sk.slice(5, 16).replace('T', ' ')), esc(r.agent ? `${r.agent} / ${r.job}${r.client ? ` (${r.client})` : ''}` : r.job), `${Math.round(r.ms / 1000)}s`, r.ok ? '✅' : `❌ <small>${esc(r.error || '')}</small>`]))
     .join('')}</table>`;
 }

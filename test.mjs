@@ -68,6 +68,32 @@ assert.equal(s.runs[0].job, 'edit');
 const dash = dashboardHtml(s);
 assert.ok(dash.includes('$0.530') && dash.includes('&lt;b&gt;x&lt;/b&gt;') && dash.includes('AWS Lambda'));
 assert.ok(dashboardHtml(summarize({}, '2026-11-05')).includes('No data yet'));
+
+// Other projects in the same table: split by agent, client and the AWS "project" tag
+const p = summarize(
+  {
+    llm: [
+      { date: '2026-11-05', job: 'draft', inTokens: 10, outTokens: 5, cost: 0.02 },
+      { date: '2026-11-05', job: 'draftOne', agent: 'linkedin-service', client: 'asha-k3f9', inTokens: 100, outTokens: 50, cost: 0.05 },
+      { date: '2026-10-30', job: 'draftOne', agent: 'linkedin-service', client: 'asha-k3f9', inTokens: 100, outTokens: 50, cost: 0.04 },
+    ],
+    runs: [{ sk: '2026-11-05T03:30:00Z#c', job: 'publish', agent: 'linkedin-service', client: 'asha-k3f9', ok: false, ms: 1000 }],
+    awsProjects: [
+      { sk: '2026-11-04', projects: { 'linkedin-agent': 0.1, 'linkedin-service': 0.2, '': 2 } },
+      { sk: '2026-10-31', projects: { 'linkedin-service': 5 } },
+    ],
+  },
+  '2026-11-05',
+);
+assert.deepEqual(p.projects.map((x) => [x.project, x.aws.toFixed(2), x.llm.toFixed(2)]), [
+  ['other (untagged)', '2.00', '0.00'],
+  ['linkedin-service', '0.20', '0.05'],
+  ['linkedin-agent', '0.10', '0.02'],
+]);
+assert.deepEqual(p.clients.map((c) => [c.client, c.tokens, c.cost.toFixed(2)]), [['asha-k3f9', 300, '0.09']]);
+assert.deepEqual(p.jobs.map((j) => j.job).sort(), ['draft', 'linkedin-service / draftOne', 'linkedin-service / publish']);
+const pd = dashboardHtml(p);
+assert.ok(pd.includes('By project') && pd.includes('asha-k3f9') && pd.includes('linkedin-service / publish (asha-k3f9)'));
 assert.equal(usd(0), '$0.00');
 
 console.log('ok');

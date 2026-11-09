@@ -586,13 +586,14 @@ async function loadUsage(days) {
   const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
   const query = async (pk, extra = { KeyConditionExpression: 'pk = :pk AND sk >= :since', ExpressionAttributeValues: { ':pk': pk, ':since': since } }) =>
     (await ddb.send(new QueryCommand({ TableName: TABLE, ...extra }))).Items;
-  const [llm, runs, aws, [balance]] = await Promise.all([
+  const [llm, runs, aws, awsProjects, [balance]] = await Promise.all([
     query('llm'),
     query('run'),
     query('aws'),
+    query('awsproject'),
     query('balance', { KeyConditionExpression: 'pk = :pk', ExpressionAttributeValues: { ':pk': 'balance' }, ScanIndexForward: false, Limit: 1 }),
   ]);
-  return { llm, runs, aws, balance };
+  return { llm, runs, aws, awsProjects, balance };
 }
 
 const dashboardUrl = (env) => `${env.APP_URL}/dashboard?key=${env.ADMIN_KEY}`;
@@ -620,7 +621,7 @@ async function spendLine(env) {
 
 async function costs(env) {
   const utcDay = (ago) => new Date(Date.now() - ago * 864e5).toISOString().slice(0, 10);
-  // Cost Explorer is $0.01 per call and only in us-east-1. One call refreshes the last 7 days, since recent days keep changing.
+  // Cost Explorer is $0.01 per call and only in us-east-1. Two calls a day refresh the last 7 days, since recent days keep changing.
   const ce = await new CostExplorerClient({ region: 'us-east-1' }).send(
     new GetCostAndUsageCommand({
       TimePeriod: { Start: utcDay(7), End: utcDay(0) },
@@ -633,6 +634,20 @@ async function costs(env) {
   for (const r of ce.ResultsByTime) {
     const services = Object.fromEntries(r.Groups.map((g) => [g.Keys[0], Number(g.Metrics.UnblendedCost.Amount)]).filter(([, v]) => v > 0));
     await record({ pk: 'aws', sk: r.TimePeriod.Start, total: Object.values(services).reduce((s, v) => s + v, 0), services });
+  }
+  // Same days split by the "project" tag (linkedin-agent, linkedin-service; "" = untagged). Needs the tag activated in Billing > Cost allocation tags.
+  const byProject = await new CostExplorerClient({ region: 'us-east-1' }).send(
+    new GetCostAndUsageCommand({
+      TimePeriod: { Start: utcDay(7), End: utcDay(0) },
+      Granularity: 'DAILY',
+      Metrics: ['UnblendedCost'],
+      GroupBy: [{ Type: 'TAG', Key: 'project' }],
+      Filter: { Dimensions: { Key: 'RECORD_TYPE', Values: ['Usage'] } },
+    }),
+  );
+  for (const r of byProject.ResultsByTime) {
+    const projects = Object.fromEntries(r.Groups.map((g) => [g.Keys[0].replace(/^project\$/, ''), Number(g.Metrics.UnblendedCost.Amount)]).filter(([, v]) => v > 0));
+    await record({ pk: 'awsproject', sk: r.TimePeriod.Start, projects });
   }
 
   const b = await fetch('https://api.deepseek.com/user/balance', { headers: { Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` } });

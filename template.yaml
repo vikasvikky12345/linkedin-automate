@@ -14,6 +14,7 @@ Resources:
   Bucket:
     Type: AWS::S3::Bucket
     Properties:
+      Tags: [{ Key: project, Value: linkedin-agent }] # cost split on the dashboard
       LifecycleConfiguration:
         Rules:
           - { Id: old-posts, Prefix: posts/, Status: Enabled, ExpirationInDays: 14 }
@@ -31,12 +32,14 @@ Resources:
         - { AttributeName: pk, KeyType: HASH }
         - { AttributeName: sk, KeyType: RANGE }
       TimeToLiveSpecification: { AttributeName: ttl, Enabled: true }
+      Tags: [{ Key: project, Value: linkedin-agent }]
 
   Logs:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /aws/lambda/linkedin-agent
       RetentionInDays: 14
+      Tags: [{ Key: project, Value: linkedin-agent }]
 
   Agent:
     Type: AWS::Serverless::Function
@@ -49,6 +52,7 @@ Resources:
       Architectures: [x86_64] # the npm chromium build is x86 only
       MemorySize: 2048
       Timeout: 300
+      Tags: { project: linkedin-agent }
       Environment:
         Variables:
           BUCKET: !Ref Bucket

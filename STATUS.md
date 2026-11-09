@@ -79,3 +79,9 @@ Deployed and LinkedIn connected (2026-10-31), but **never run for real**. Next: 
 - [ ] Check that a Claude Code cloud session can trigger `job.yml`
 - [ ] Phase 2: shared `llm()` / email / job helpers so new agents log usage to the same table with their own name
 
+## Other projects on this dashboard (added 2026-11-05)
+
+- [x] `../linkedin-service` (paid client posting, separate stack) writes its DeepSeek calls and runs to this `Usage` table with `agent` and `client`; the dashboard shows "By project" and per-client cost
+- [x] `costs` job also pulls AWS cost by the `project` tag (second Cost Explorer call, $0.01/day); this stack's resources are tagged `project=linkedin-agent`
+- [ ] Activate the `project` cost-allocation tag in Billing (command in `../linkedin-service/README.md`); until then all AWS cost shows as "other (untagged)"
+
